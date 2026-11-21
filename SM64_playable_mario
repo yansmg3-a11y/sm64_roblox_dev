@@ -420,6 +420,17 @@ rle = "/AE4AA/AA2AAvAAUAAuAAVACUADuABZAAyAAaAA0AA4AA9AA/AJ9AA/AAyAAVAAWAAuADWAAZ
 local function main(character, mode)
 local _M = {}
 local PK = { killed = false, origT = {}, puppet = mode == "puppet", luigi = (PC.Luigi == true), kit = (PC.Kit == true and PC.Luigi ~= true), stant = (PC.Stant == true and PC.Luigi ~= true and PC.Kit ~= true) }
+-- Spawn animation (SM64 menu > "Spawn Animation"): Mario drops in from the air spinning and lands. Turn it off in the menu.
+-- (kept in one table on purpose: this script is huge and Luau limits locals / upvalues per function)
+_M.SP = {
+pending = ((shared.M64Opts or {}).spawnAnim ~= false) and not PK.puppet,
+spin = false,
+height = 6,  -- how high Mario starts, in Mario-heights (6 = about 30 studs)
+rate = 600,  -- how fast he turns while falling, degrees per second
+fall = 0.65, -- swapped characters (Dante, Party Pony ...): how long the drop lasts, in seconds
+offset = CFrame.identity, -- visual drop / spin of a swapped character (only used while t0 is set)
+t0 = nil,
+}
 local EASY = {
 Size = 5,
 SizeAccurate = 3.9,
@@ -1904,7 +1915,7 @@ elseif ROT[j] == "Torso" then cf = CFrame.new(nodeT[j]) * tilt * pose[j]
 elseif ROT[j] == "Head" and _M.headYaw then
 cf = CFrame.new(nodeT[j]) * pose[j] * CFrame.fromAxisAngle(Vector3.new(1, 0, 0), _M.headYaw * CFG.HeadYawSign) * CFrame.fromAxisAngle(Vector3.new(0, 0, 1), _M.headPitch * CFG.HeadPitchSign)
 else cf = CFrame.new(nodeT[j]) * pose[j] end
-motors[j].C0 = baseC0[j] * cf
+motors[j].C0 = (j == 1 and _M.SP and _M.SP.t0) and (_M.SP.offset * baseC0[j] * cf) or (baseC0[j] * cf)
 end
 local sq = _M.squash
 if sq and (sq.sx ~= 1 or sq.sy ~= 1) then
@@ -2703,6 +2714,7 @@ end
 local ACC_PUSHABLE = { Idle = true, Walk = true, Skid = true, Land = true, Crouch = true, Crawl = true }
 -- called when an air move touches the ground: too long a fall = squished + damage (ground pound is safe)
 function ACC.onLand(from)
+if _M.spawnFall then _M.spawnFall = false; ACC.peak, ACC.maxDown = root.Position.Y, 0; return false end -- the spawn drop is harmless
 if not accOn() then return false end
 local drop, down = ACC.peak - root.Position.Y, ACC.maxDown
 ACC.peak, ACC.maxDown = root.Position.Y, 0
@@ -3350,6 +3362,37 @@ if debugMode then
 humanoid:Move(Vector3.zero, false)
 humanoid.WalkSpeed = 0.01
 return
+end
+if _M.SP.pending then
+_M.SP.pending = false
+if (shared.M64Opts or {}).spawnAnim ~= false and humanoid.Health > 0 then
+local H = CFG.ModelHeight
+local up = H * _M.SP.height
+local hit = workspace:Raycast(root.Position, Vector3.new(0, up + H, 0), rayParams)
+if hit then up = hit.Distance - H * 1.5 end -- low ceiling: start lower
+if up >= H * 2 then
+root.CFrame = root.CFrame + Vector3.new(0, up, 0)
+root.AssemblyLinearVelocity = Vector3.zero
+hv, fVel = Vector3.zero, 0
+launchGrace = 0.2
+_M.spawnFall = true
+_M.SP.spin = true
+setState("Fall")
+diveSpinT = 99 -- keep the spin animation until he lands
+_M.LOOPED.spin = true -- loop the spin while he falls
+play("spin", 1, 0.04)
+end
+end
+end
+if _M.SP.spin then
+if state ~= "Fall" or humanoid.Health <= 0 then
+_M.SP.spin = false
+_M.spawnFall = false
+_M.LOOPED.spin = nil
+diveSpinT = 0
+else
+faceYaw += math.rad(_M.SP.rate) * dt
+end
 end
 do
 local okA, handled = pcall(ACC.step, dt)
@@ -5100,6 +5143,7 @@ local ITEMS = {
 { "Play as Stant", function() return PC.Stant == true and PC.Luigi ~= true and PC.Kit ~= true end, function() local on = (PC.Stant == true and PC.Luigi ~= true and PC.Kit ~= true); PC.Stant = not on; if PC.Stant then PC.Luigi = false; PC.Kit = false end; if PC.Refresh then PC.Refresh() end end, nil, function() if PC.Stant == true and PC.Luigi ~= true and PC.Kit ~= true then return "Character: STANT  (tap = Mario)" end return "Character: " .. ((PC.Luigi == true) and "LUIGI" or ((PC.Kit == true) and "THE KIT" or "MARIO")) .. "  (tap = Stant)" end },
 { "Play as The Kit", function() return PC.Kit == true and PC.Luigi ~= true end, function() PC.Kit = not (PC.Kit == true); if PC.Kit then PC.Luigi = false; PC.Stant = false end; if PC.Refresh then PC.Refresh() end end, nil, function() if PC.Kit == true and PC.Luigi ~= true then return "Character: THE KIT  (tap = Mario)" end return "Character: " .. ((PC.Luigi == true) and "LUIGI" or "MARIO") .. "  (tap = The Kit)" end },
 { "Others See My Animations (R15)", function() return _M.mimicOn ~= false end, function() _M.mimicOn = not (_M.mimicOn ~= false) end },
+{ "Spawn Animation", function() return opts.spawnAnim ~= false end, function() opts.spawnAnim = not (opts.spawnAnim ~= false) end, nil, function() return (opts.spawnAnim ~= false) and "Spawn Animation ON:  every character (Mario, Luigi, Stant, The Kit and swapped ones) drops in spinning and lands" or "Spawn Animation OFF:  Mario just appears" end },
 { "Dev Screen", function() return opts.dev == true end, function() opts.dev = not (opts.dev == true) end },
 { "N64 Controller Display", function() return opts.padHud ~= false end, function() opts.padHud = not (opts.padHud ~= false) end },
 { "Unfreeze Mario (Anti-Lock)", function() return opts.antiLock ~= false end, function() opts.antiLock = not (opts.antiLock ~= false) end, nil, function() local a = shared.M64AntiLock; local on = opts.antiLock ~= false; return "Anti-Lock " .. (on and "ON" or "OFF") .. ":  frees Mario when a game locks him (anchored, frozen, controls off)" .. ((a and a.fixes > 0) and ("  ::  fixed " .. a.fixes .. "x, last: " .. a.last) or "") end },
@@ -7048,10 +7092,29 @@ end
 return nil
 end
 local wasAir, landHold, lastFace = false, 0, nil
+-- spawn animation for swapped characters: only the Mario model drops in (spinning) - the real character is not moved
+if (shared.M64Opts or {}).spawnAnim ~= false then _M.SP.t0 = os.clock() end
 local conn
 conn = RunService.Heartbeat:Connect(function(dt)
 if PK.killed or not character.Parent then conn:Disconnect() return end
 if dead or humanoid.Health <= 0 then return end
+if _M.SP.t0 then
+local e = os.clock() - _M.SP.t0
+if e >= _M.SP.fall or (shared.M64Opts or {}).spawnAnim == false then
+_M.SP.t0 = nil
+_M.SP.offset = CFrame.identity
+_M.LOOPED.spin = nil
+wasAir, landHold = false, 0.18
+curName = nil
+play("general_land", 1, 0.04)
+else
+local k = e / _M.SP.fall
+_M.SP.offset = CFrame.new(0, CFG.ModelHeight * _M.SP.height * (1 - k * k), 0) * CFrame.Angles(0, math.rad(_M.SP.rate) * e, 0)
+_M.LOOPED.spin = true
+play("spin", 1, 0.04)
+return
+end
+end
 if animObj then
 for _, t in ipairs(animObj:GetPlayingAnimationTracks()) do
 if not known[t] then
