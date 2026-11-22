@@ -4426,8 +4426,181 @@ local SAND_MATS = { [Enum.Material.Sand] = true, [Enum.Material.Sandstone] = tru
 local WOOD_MATS = { [Enum.Material.Wood] = true, [Enum.Material.WoodPlanks] = true }
 local DIRT_MATS = { [Enum.Material.Ground] = true, [Enum.Material.Mud] = true }
 local GRASS_MATS = { [Enum.Material.Grass] = true, [Enum.Material.LeafyGrass] = true }
+-- ---------- Custom Steps: your own footstep sounds, read from a GitHub folder ----------
+-- folder layout:  SM64_Steps / <surface folder> / sounds.mp3   (Grass Steps, Water Steps, Metal Steps, Snow Steps ... the name only has to contain the surface word)
+_M.STEPS = {
+folder = "https://github.com/yansmg3-a11y/sm64_roblox_dev/tree/main/SM64_Steps", -- paste your GitHub folder link here
+surf = {}, loading = {}, scanned = false, scanning = false, status = "",
+WORDS = { "water", "snow", "sand", "metal", "grass", "dirt", "gravel", "mud", "ice", "glass", "carpet", "tile", "stone", "concrete", "wood", "rock" },
+-- what Mario is standing on  ->  which of your folders to try (first one that exists wins)
+MAT = {
+Grass = { "grass" }, LeafyGrass = { "grass" }, Ground = { "dirt", "gravel", "grass", "sand" }, Mud = { "mud", "dirt", "sand" },
+Sand = { "sand" }, Sandstone = { "sand", "stone" }, Salt = { "sand", "snow" }, Snow = { "snow" }, Ice = { "ice", "snow", "glass" }, Glacier = { "snow", "ice" },
+Wood = { "wood", "hardwood" }, WoodPlanks = { "hardwood", "wood" }, Fabric = { "carpet", "wood" },
+Metal = { "metal" }, DiamondPlate = { "metal" }, CorrodedMetal = { "metal" }, Foil = { "metal" },
+Glass = { "glass", "stone" }, Rock = { "rock", "stone" },
+Concrete = { "concrete", "stone" }, Pavement = { "concrete", "stone" }, Asphalt = { "concrete", "stone" },
+},
+DEFAULT = { "stone", "concrete", "hardwood", "wood" }, -- plastic, bricks and everything else
+}
+function _M.STEPS.say(t)
+_M.STEPS.status = t
+if _M.MUS and _M.MUS.refresh then pcall(_M.MUS.refresh) end
+end
+-- "Hard Wood Steps" -> "hardwood", "Stone Steps (Normal A)" -> "stone", "Water Steps" -> "water"
+function _M.STEPS.keyOf(name)
+local n = string.lower(name)
+n = string.gsub(n, "%.%w+$", "")
+n = string.gsub(n, "%b()", " ")
+n = string.gsub(n, "[^%a]+", " ")
+n = string.gsub(n, "%f[%a]steps?%f[%A]", " ")
+n = string.gsub(n, "%f[%a]sounds?%f[%A]", " ")
+n = string.gsub(n, "^%s+", "")
+n = string.gsub(n, "%s+$", "")
+if string.find(n, "hard", 1, true) and string.find(n, "wood", 1, true) then return "hardwood" end
+for _, k in ipairs(_M.STEPS.WORDS) do
+if string.find(n, k, 1, true) then return k end
+end
+return (string.gsub(n, "%s+", ""))
+end
+-- what a file is for, from its name: Step_3 -> "step", Jump -> "jump", Land -> "land", Ground_Pound -> "gp", Walk_fast / Run_slow / Tiptoe ... -> "loop" (long recordings, not used yet)
+function _M.STEPS.roleOf(file)
+local n = string.lower((string.gsub(file, "%.%w+$", "")))
+if string.find(n, "pound", 1, true) then return "gp" end
+if string.find(n, "jump", 1, true) then return "jump" end
+if string.find(n, "land", 1, true) then return "land" end
+for _, w in ipairs({ "crawl", "push", "tiptoe", "tip toe", "run", "walk" }) do
+if string.find(n, w, 1, true) then return "loop" end
+end
+return "step"
+end
+-- reads the whole GitHub folder with one request
+function _M.STEPS.scan(force, done)
+local T = _M.STEPS
+if T.scanning then return end
+T.scanning = true
+T.say("reading the GitHub folder...")
+task.spawn(function()
+local ok, res = pcall(function()
+local f = string.gsub(T.folder, "/+$", "")
+local owner, repo, branch, path = string.match(f, "github%.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)$")
+if not owner then error("bad folder link") end
+local data = (not force) and shared.M64StepsIndex and shared.M64StepsIndex.key == f and shared.M64StepsIndex.data
+if not data then
+data = game:GetService("HttpService"):JSONDecode(game:HttpGet("https://api.github.com/repos/" .. owner .. "/" .. repo .. "/git/trees/" .. branch .. "?recursive=1"))
+shared.M64StepsIndex = { key = f, data = data }
+end
+local surf, n = {}, 0
+for _, e in ipairs(data.tree or {}) do
+local low = string.lower(e.path or "")
+if e.type == "blob" and string.sub(e.path, 1, #path + 1) == path .. "/" and (string.match(low, "%.mp3$") or string.match(low, "%.ogg$")) then
+local rel = string.sub(e.path, #path + 2)
+local top = string.match(rel, "^([^/]+)/") or rel
+local key = _M.STEPS.keyOf(top)
+local enc = string.gsub(e.path, "[^%w%-%._~/]", function(c) return string.format("%%%02X", string.byte(c)) end)
+surf[key] = surf[key] or {}
+table.insert(surf[key], { path = e.path, role = _M.STEPS.roleOf(string.match(e.path, "([^/]+)$")), url = "https://raw.githubusercontent.com/" .. owner .. "/" .. repo .. "/" .. branch .. "/" .. enc })
+n += 1
+end
+end
+if n == 0 then error("no sounds in that folder") end
+return surf
+end)
+T.scanning = false
+T.scanned = true
+if ok then
+T.surf = res
+T.loading = {}
+local names = {}
+for k in pairs(res) do names[#names + 1] = k end
+table.sort(names)
+T.say("found: " .. table.concat(names, ", "))
+else
+T.say("can't read the folder, using the normal steps")
+end
+if done then pcall(done) end
+end)
+end
+-- downloads one surface (all its variants) in the background; the normal sound plays until it is ready
+function _M.STEPS.fetch(key)
+local T = _M.STEPS
+if T.loading[key] then return end
+T.loading[key] = true
+task.spawn(function()
+for _, f in ipairs(T.surf[key] or {}) do
+pcall(function()
+if f.role == "loop" then return end
+if not (isfile and writefile and getcustomasset) then return end
+local fn = "m64step_" .. string.gsub(f.path, "[^%w%._%-]", "_")
+if not isfile(fn) then
+local data = game:HttpGet(f.url)
+if #data < 100 then return end
+writefile(fn, data)
+end
+local snd = Instance.new("Sound")
+snd.SoundId = getcustomasset(fn)
+snd.Volume = 1
+snd:SetAttribute("M64Custom", true)
+f.snd = snd
+end)
+end
+end)
+end
+function _M.STEPS.water()
+local ok, res = pcall(function()
+if humanoid:GetState() == Enum.HumanoidStateType.Swimming or humanoid.FloorMaterial == Enum.Material.Water then return true end
+local feet = root.Position - Vector3.new(0, rigFeet(), 0)
+local region = Region3.new(feet - Vector3.new(1.5, 0.5, 1.5), feet + Vector3.new(1.5, 1.5, 1.5)):ExpandToGrid(4)
+local mats, occ = workspace.Terrain:ReadVoxels(region, 4)
+local sz = mats.Size
+for x = 1, sz.X do
+for y = 1, sz.Y do
+for z = 1, sz.Z do
+if mats[x][y][z] == Enum.Material.Water and occ[x][y][z] > 0.3 then return true end
+end
+end
+end
+return false
+end)
+return ok and res or false
+end
+-- the sound for the surface Mario is on, or nil (then the normal sound is used). role: "step" (default), "jump", "land", "gp"
+function _M.STEPS.pick(matName, metal, role)
+local T = _M.STEPS
+role = role or "step"
+if (shared.M64Opts or {}).customSteps == false or not T.scanned then return nil end
+local chain
+if T.surf.water and T.water() then chain = { "water" }
+elseif metal then chain = { "metal" }
+else chain = T.MAT[matName] or T.DEFAULT end
+for _, key in ipairs(chain) do
+local list = T.surf[key]
+if list and #list > 0 then
+local ready, any = {}, false
+for _, f in ipairs(list) do
+if f.role == role then
+any = true
+if f.snd then ready[#ready + 1] = f.snd end
+end
+end
+if not any then return nil end -- this surface has no sound for that (e.g. no Jump file): the normal one plays
+if #ready == 0 then T.fetch(key) return nil end
+local pickd = ready[math.random(#ready)]
+T.last = T.last or {}
+if #ready > 1 and T.last[role .. key] == pickd then -- never the same step twice in a row
+pickd = ready[(table.find(ready, pickd) % #ready) + 1]
+end
+T.last[role .. key] = pickd
+return pickd
+end
+end
+return nil
+end
+task.spawn(function() _M.STEPS.scan(false) end)
 local function stepSound()
 local m = humanoid.FloorMaterial
+local custom = _M.STEPS.pick(m.Name, FXS.metal, "step")
+if custom then return custom end
 if FXS.metal then return STEP.metal end
 if SAND_MATS[m] then return STEP.sand end
 if WOOD_MATS[m] then return STEP.wood end
@@ -4437,13 +4610,21 @@ return STEP.default
 end
 local function playStep(snd, lo, hi, vol)
 if not opts.sound then return end
-local gain = (snd == STEP.default or snd == STEP.dirt) and 1 or 2.5
+local custom = snd:GetAttribute("M64Custom")
+local gain = (custom or snd == STEP.default or snd == STEP.dirt) and 1 or 2.5
 local c = snd:Clone()
-c.PlaybackSpeed = math.random(lo, hi) / 100
+c.PlaybackSpeed = custom and math.random(95, 106) / 100 or math.random(lo, hi) / 100
 c.Volume = vol * gain
 c.Parent = root
 c:Play()
 Debris:AddItem(c, 2)
+end
+-- plays your custom jump / land / ground pound sound for the surface under Mario; false = there is none (the normal sound plays)
+function _M.STEPS.sfx(role, vol)
+local snd = _M.STEPS.pick(humanoid.FloorMaterial.Name, FXS.metal, role)
+if not snd then return false end
+playStep(snd, 95, 105, vol)
+return true
 end
 -- ---------- mute Roblox's own footstep sound ("Running" in the HumanoidRootPart) on every character: yours and everybody else's (client side) ----------
 do
@@ -5303,6 +5484,8 @@ local ITEMS = {
 { "  Music Track", function() return opts.music == true end, function() local M = _M.MUS; M.idx = M.idx % #M.tracks + 1; if opts.music == true then M.play() end end, function() return opts.music == true end, function() local M = _M.MUS; return "Track " .. M.idx .. "/" .. #M.tracks .. ":  " .. M.tracks[M.idx][1] .. "  (tap = next)" end, _M.MUS.blue },
 { "  Music Rescan", function() return opts.music == true end, function() local M = _M.MUS; M.scanned = false; M.scan(function() if opts.music == true then M.play() end end) end, function() return opts.music == true end, function() return "Rescan the GitHub folder  (tap = read it again)" end, _M.MUS.blue },
 { "  Music Volume", function() return opts.music == true end, function() local M = _M.MUS; M.vol = M.vol >= 1 and 0.25 or M.vol + 0.25; M.sound() end, function() return opts.music == true end, function() return "Music volume:  " .. math.floor(_M.MUS.vol * 100 + 0.5) .. "%  (tap = change)" end, _M.MUS.blue },
+{ "Custom Steps", function() return opts.customSteps ~= false end, function() opts.customSteps = not (opts.customSteps ~= false) end, nil, function() local T = _M.STEPS; if opts.customSteps == false then return "Custom Steps:  off  (normal steps)" end return "Custom Steps:  " .. (T.status ~= "" and T.status or "on") end, _M.MUS.blue },
+{ "  Steps Rescan", function() return opts.customSteps ~= false end, function() local T = _M.STEPS; T.scanned = false; T.scan(true) end, function() return opts.customSteps ~= false end, function() return "Rescan the GitHub steps folder  (tap = read it again)" end, _M.MUS.blue },
 { "Dev Screen", function() return opts.dev == true end, function() opts.dev = not (opts.dev == true) end },
 { "N64 Controller Display", function() return opts.padHud ~= false end, function() opts.padHud = not (opts.padHud ~= false) end },
 { "Unfreeze Mario (Anti-Lock)", function() return opts.antiLock ~= false end, function() opts.antiLock = not (opts.antiLock ~= false) end, nil, function() local a = shared.M64AntiLock; local on = opts.antiLock ~= false; return "Anti-Lock " .. (on and "ON" or "OFF") .. ":  frees Mario when a game locks him (anchored, frozen, controls off)" .. ((a and a.fixes > 0) and ("  ::  fixed " .. a.fixes .. "x, last: " .. a.last) or "") end },
@@ -6250,19 +6433,20 @@ if lastAirState == "GroundPound" then
 ring(feet + Vector3.new(0, 0.2, 0), 16, 20, 2.2)
 puff(feet, 10, 10, 2)
 stars(feet + Vector3.new(0, 0.5, 0), 14, 16, 1.3)
-if opts.sound then local t = (GPLAND.SoundId ~= "" and GPLAND or THUD):Clone(); t.Parent = root; t:Play(); Debris:AddItem(t, 3) end
+if opts.sound and not _M.STEPS.sfx("gp", 1.4) then local t = (GPLAND.SoundId ~= "" and GPLAND or THUD):Clone(); t.Parent = root; t:Play(); Debris:AddItem(t, 3) end
 elseif lastAirState == "TripleJump" then
 sfx("tripleland")
 puff(feet, 8, 9, 1.8)
-playStep(stepSound(), 80, 92, 1)
+if not _M.STEPS.sfx("land", 1.2) then playStep(stepSound(), 80, 92, 1) end
 elseif fall > 14 then
 puff(feet, math.clamp(math.floor(fall / 5), 3, 12), 7, 1.5)
-playStep(stepSound(), 80, 92, math.clamp(0.7 + fall / 90, 0.7, 1.5))
+if not _M.STEPS.sfx("land", math.clamp(0.7 + fall / 90, 0.7, 1.5)) then playStep(stepSound(), 80, 92, math.clamp(0.7 + fall / 90, 0.7, 1.5)) end
 else
 puff(feet, 2, 4, 1)
 end
 elseif prevGround and not grounded and vel.Y > 12 then
 puff(feet, 4, 5, 1.2)
+_M.STEPS.sfx("jump", 0.8)
 end
 prevGround = grounded
 if grounded then
