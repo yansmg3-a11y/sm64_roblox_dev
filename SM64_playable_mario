@@ -5163,6 +5163,135 @@ gui.Parent = PlayerGui
 -- Pursuitcore (playable Mario): toggle only for now; set opts.pursuitHook = function(on) ... end later
 local M64UI = {}
 local FACENAMES = { "AUTO", "1 open", "2 half", "3 closed", "4 X", "5 side-eye", "6 smirk", "7 angry" }
+-- ---------- Musics (testing): reads a GitHub folder and plays every song in it ----------
+_M.MUS = {
+-- paste your GitHub folder link here: every .mp3 / .ogg inside it shows up as a track (new files too, use "Music Rescan")
+folder = "https://github.com/yansmg3-a11y/sm64_roblox_dev/tree/main/SM64_Music",
+-- used only when GitHub can't be read (no internet / rate limit): the same folder, files named like this
+tracks = {
+{ "Title Theme", "title_theme.mp3" },
+{ "Slider", "slider.mp3" },
+{ "Looping Steps", "looping_steps.mp3" },
+{ "Lethal Lava Land", "lethal_lava_land.mp3" },
+{ "Snow Mountain", "snow_mountain.mp3" },
+{ "Haunted House", "haunted_house.mp3" },
+},
+idx = 1, vol = 0.5, status = "", token = 0, ids = {}, scanned = false, scanning = false,
+blue = { on = Color3.fromRGB(60, 130, 240), off = Color3.fromRGB(45, 75, 140) },
+}
+function _M.MUS.parts()
+local f = string.gsub(_M.MUS.folder, "/+$", "")
+local owner, repo, branch, path = string.match(f, "github%.com/([^/]+)/([^/]+)/tree/([^/]+)/(.+)$")
+return owner, repo, branch, path
+end
+function _M.MUS.url(tr)
+if tr[3] then return tr[3] end
+local owner, repo, branch, path = _M.MUS.parts()
+return "https://github.com/" .. tostring(owner) .. "/" .. tostring(repo) .. "/raw/refs/heads/" .. tostring(branch) .. "/" .. tostring(path) .. "/" .. tr[2]
+end
+function _M.MUS.sound()
+local SS = game:GetService("SoundService")
+local snd = SS:FindFirstChild("M64Music")
+if not snd then
+snd = Instance.new("Sound")
+snd.Name = "M64Music"
+snd.Looped = true
+snd.Parent = SS
+end
+snd.Volume = _M.MUS.vol
+return snd
+end
+function _M.MUS.say(t)
+_M.MUS.status = t
+if _M.MUS.refresh then pcall(_M.MUS.refresh) end
+end
+-- reads the GitHub folder (contents API) and builds the track list from it; done() runs when it has finished
+function _M.MUS.scan(done)
+local M = _M.MUS
+if M.scanning then return end
+M.scanning = true
+M.say("reading the GitHub folder...")
+task.spawn(function()
+local ok, res = pcall(function()
+local owner, repo, branch, path = M.parts()
+if not owner then error("bad folder link") end
+local url = "https://api.github.com/repos/" .. owner .. "/" .. repo .. "/contents/" .. path .. "?ref=" .. branch
+local arr = game:GetService("HttpService"):JSONDecode(game:HttpGet(url))
+local out = {}
+for _, f in ipairs(arr) do
+local low = string.lower(f.name or "")
+if f.type == "file" and (string.match(low, "%.mp3$") or string.match(low, "%.ogg$")) then
+local pretty = string.gsub(f.name, "%.%w+$", "")
+pretty = string.gsub(pretty, "^%d+[%s_%-%.]+", "")
+pretty = string.gsub(pretty, "[_]+", " ")
+pretty = string.gsub(pretty, "(%a)([%w']*)", function(x, y) return string.upper(x) .. y end)
+out[#out + 1] = { pretty, f.name, f.download_url }
+end
+end
+table.sort(out, function(x, y) return x[2] < y[2] end)
+if #out == 0 then error("no songs in that folder") end
+return out
+end)
+M.scanning = false
+M.scanned = true
+if ok then
+local keep = M.tracks[M.idx] and M.tracks[M.idx][2]
+M.tracks = res
+M.idx = 1
+for i, t in ipairs(res) do if t[2] == keep then M.idx = i end end
+M.say("found " .. #res .. " songs")
+else
+M.say("can't read the folder, using the built-in list")
+end
+if done then pcall(done) end
+end)
+end
+function _M.MUS.play()
+local M = _M.MUS
+local tr = M.tracks[M.idx]
+if not tr then return end
+M.token += 1
+local my = M.token
+local snd = M.sound()
+snd:Stop()
+if not (isfile and writefile and getcustomasset) then M.say("your executor can't load files") return end
+local id = M.ids[tr[2]]
+if id then snd.SoundId = id; snd:Play(); M.say("playing") return end
+M.say("loading...")
+task.spawn(function()
+local ok, res = pcall(function()
+local f = "m64music_" .. string.gsub(tr[2], "[^%w%._%-]", "_")
+if not isfile(f) then
+local data = game:HttpGet(M.url(tr))
+if #data < 2000 then error("not found on GitHub") end -- a GitHub error page, not a song
+writefile(f, data)
+end
+return getcustomasset(f)
+end)
+if my ~= M.token or opts.music ~= true then return end -- switched track / turned off while it was loading
+if ok and res then
+M.ids[tr[2]] = res
+snd.SoundId = res
+snd:Play()
+M.say("playing")
+else
+M.say("failed: " .. string.sub(tostring(res), 1, 40))
+end
+end)
+end
+-- turning Musics on: read the folder the first time, then play
+function _M.MUS.start()
+local M = _M.MUS
+if M.scanned then M.play() return end
+M.scan(function() if opts.music == true then M.play() end end)
+end
+function _M.MUS.stop()
+local M = _M.MUS
+M.token += 1
+local snd = game:GetService("SoundService"):FindFirstChild("M64Music")
+if snd then snd:Stop() end
+M.say("")
+end
 local ITEMS = {
 { "SM64 Menu (new)", function() return M64UI.open == true end, function() if M64UI.toggle then M64UI.toggle() end end, nil, function() return "SM64 Menu (new)  ::  tap to open" end },
 { "Play as Luigi", function() return PC.Luigi == true end, function() PC.Luigi = not (PC.Luigi == true); if PC.Luigi then PC.Kit = false; PC.Stant = false end; if PC.Refresh then PC.Refresh() end end, nil, function() return (PC.Luigi == true) and "Character: LUIGI  (tap = Mario)" or "Character: MARIO  (tap = Luigi)" end },
@@ -5170,6 +5299,10 @@ local ITEMS = {
 { "Play as The Kit", function() return PC.Kit == true and PC.Luigi ~= true end, function() PC.Kit = not (PC.Kit == true); if PC.Kit then PC.Luigi = false; PC.Stant = false end; if PC.Refresh then PC.Refresh() end end, nil, function() if PC.Kit == true and PC.Luigi ~= true then return "Character: THE KIT  (tap = Mario)" end return "Character: " .. ((PC.Luigi == true) and "LUIGI" or "MARIO") .. "  (tap = The Kit)" end },
 { "Others See My Animations (R15)", function() return _M.mimicOn ~= false end, function() _M.mimicOn = not (_M.mimicOn ~= false) end },
 { "Spawn Animation", function() return opts.spawnAnim ~= false end, function() opts.spawnAnim = not (opts.spawnAnim ~= false) end, nil, function() return (opts.spawnAnim ~= false) and "Spawn Animation ON:  every character (Mario, Luigi, Stant, The Kit and swapped ones) drops in spinning and lands" or "Spawn Animation OFF:  Mario just appears" end },
+{ "Musics", function() return opts.music == true end, function() opts.music = not (opts.music == true); if opts.music then _M.MUS.start() else _M.MUS.stop() end end, nil, function() local M = _M.MUS; if opts.music ~= true then return "Musics (testing):  off" end return "Musics:  " .. M.tracks[M.idx][1] .. "  (" .. M.status .. ")" end, _M.MUS.blue },
+{ "  Music Track", function() return opts.music == true end, function() local M = _M.MUS; M.idx = M.idx % #M.tracks + 1; if opts.music == true then M.play() end end, function() return opts.music == true end, function() local M = _M.MUS; return "Track " .. M.idx .. "/" .. #M.tracks .. ":  " .. M.tracks[M.idx][1] .. "  (tap = next)" end, _M.MUS.blue },
+{ "  Music Rescan", function() return opts.music == true end, function() local M = _M.MUS; M.scanned = false; M.scan(function() if opts.music == true then M.play() end end) end, function() return opts.music == true end, function() return "Rescan the GitHub folder  (tap = read it again)" end, _M.MUS.blue },
+{ "  Music Volume", function() return opts.music == true end, function() local M = _M.MUS; M.vol = M.vol >= 1 and 0.25 or M.vol + 0.25; M.sound() end, function() return opts.music == true end, function() return "Music volume:  " .. math.floor(_M.MUS.vol * 100 + 0.5) .. "%  (tap = change)" end, _M.MUS.blue },
 { "Dev Screen", function() return opts.dev == true end, function() opts.dev = not (opts.dev == true) end },
 { "N64 Controller Display", function() return opts.padHud ~= false end, function() opts.padHud = not (opts.padHud ~= false) end },
 { "Unfreeze Mario (Anti-Lock)", function() return opts.antiLock ~= false end, function() opts.antiLock = not (opts.antiLock ~= false) end, nil, function() local a = shared.M64AntiLock; local on = opts.antiLock ~= false; return "Anti-Lock " .. (on and "ON" or "OFF") .. ":  frees Mario when a game locks him (anchored, frozen, controls off)" .. ((a and a.fixes > 0) and ("  ::  fixed " .. a.fixes .. "x, last: " .. a.last) or "") end },
@@ -5330,7 +5463,7 @@ end
 rows[i].Visible = vis
 if vis then shown += 1 end
 rows[i].Text = it[5] and it[5]() or (it[1] .. (on and ":  ON" or ":  off"))
-rows[i].BackgroundColor3 = on and ON or OFF
+rows[i].BackgroundColor3 = on and (it[6] and it[6].on or ON) or (it[6] and it[6].off or OFF)
 end
 local cam = workspace.CurrentCamera
 local vsY = cam and cam.ViewportSize.Y or 600
@@ -5449,6 +5582,7 @@ end
 return table.concat(out)
 end
 local P = { page = 1, focus = 1, texts = {} }
+_M.MUS.refresh = function() pcall(menuRefresh); if P.refresh then pcall(P.refresh) end end
 local function visibleItems()
 local list = {}
 for _, it in ipairs(ITEMS) do
@@ -5595,11 +5729,11 @@ if it then
 local on = it[2]() and true or false
 sl.name.Text = clean(it[1])
 sl.st.Text = on and "ON" or "OFF"
-sl.st.TextColor3 = on and Color3.fromRGB(70, 255, 100) or Color3.fromRGB(235, 235, 235)
+sl.st.TextColor3 = on and (it[6] and Color3.fromRGB(120, 170, 255) or Color3.fromRGB(70, 255, 100)) or Color3.fromRGB(235, 235, 235)
 if hasImg then
-sl.btn.ImageColor3 = on and Color3.fromRGB(175, 255, 175) or Color3.new(1, 1, 1)
+sl.btn.ImageColor3 = it[6] and (on and Color3.fromRGB(110, 150, 255) or Color3.fromRGB(165, 190, 255)) or (on and Color3.fromRGB(175, 255, 175) or Color3.new(1, 1, 1))
 else
-sl.btn.BackgroundColor3 = on and Color3.fromRGB(100, 200, 110) or Color3.fromRGB(150, 165, 150)
+sl.btn.BackgroundColor3 = it[6] and (on and Color3.fromRGB(70, 130, 240) or Color3.fromRGB(100, 130, 200)) or (on and Color3.fromRGB(100, 200, 110) or Color3.fromRGB(150, 165, 150))
 end
 end
 end
