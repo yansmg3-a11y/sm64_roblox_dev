@@ -3219,6 +3219,7 @@ local function main(character, mode)
         carried, carryInfo = nil, nil
         CFG.Carry = false
         if carryWeld then carryWeld:Destroy(); carryWeld = nil end
+        pcall(function() m:SetAttribute("M64Held", nil) end)
         if m.Parent then
             for part, v in pairs(info.parts) do
                 if part.Parent then part.CanCollide = v.cc; part.Massless = v.ms end
@@ -3255,6 +3256,7 @@ local function main(character, mode)
             end
         end
         h.PlatformStand = true
+        pcall(function() best:SetAttribute("M64Held", true) end)
         hrp.Anchored = false
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.CFrame = root.CFrame * CFrame.new(0, CFG.ModelHeight * 0.85, 0)
@@ -7338,12 +7340,234 @@ local function main(character, mode)
                         b.Font = Enum.Font.Code; b.TextSize = 14; b.TextColor3 = Color3.new(1, 1, 1); b.Text = label; b.LayoutOrder = order
                         b.Activated:Connect(function() pcall(fn) end)
                         b.Parent = box
+                        return b
                     end
                     btn("Test skull wipe", 2, function()
                             W.run(1, getCenter)
                             task.delay(2.8, function() if W.mode == "closed" then W.run(-1, getCenter) end end)
                     end)
                     btn("Kill Mario", 3, function() humanoid.Health = 0 end)
+
+                    -- ===== DEV CLONE: a look-alike NPC Mario. Fight it (punch / kick), grab it (F / G, throw with B) and use it to test the battle music =====
+                    local CL = (function()
+                        local Players = game:GetService("Players")
+                        local S = shared.M64DevCl
+                        if not S then S = { mode = "IDLE", combat = true, di = 1, model = nil, nextAtk = 0, atkIdx = 0 }; shared.M64DevCl = S end
+                        local DISTS = { 12, 40, 80, 130 } -- studs: near the beat starts at 45, no beat from 110
+                        local MODES = { "IDLE", "FOLLOW", "FIGHT" }
+                        local labels = {}
+                        local CL
+                        local function hum() return S.model and S.model.Parent and S.model:FindFirstChildOfClass("Humanoid") end
+                        local function act(anim, dur, face)
+                            local reg = shared.PursuitMarioReg and S.model and shared.PursuitMarioReg[S.model]
+                            if reg and reg.devAct then reg.devAct(anim, dur, face) end
+                        end
+                        local function groundAt(pos)
+                            local rp = RaycastParams.new()
+                            rp.FilterType = Enum.RaycastFilterType.Exclude
+                            rp.FilterDescendantsInstances = { character, S.model }
+                            local r = workspace:Raycast(pos + Vector3.new(0, 60, 0), Vector3.new(0, -250, 0), rp)
+                            return r and r.Position or pos
+                        end
+                        local function spotAt(d)
+                            local cam = workspace.CurrentCamera
+                            local look = cam and cam.CFrame.LookVector or root.CFrame.LookVector
+                            look = Vector3.new(look.X, 0, look.Z)
+                            look = look.Magnitude > 0.05 and look.Unit or Vector3.new(0, 0, -1)
+                            local g = groundAt(root.Position + look * d)
+                            return g + Vector3.new(0, 3.2, 0)
+                        end
+                        local function part(m, name, size, color, collide)
+                            local p = Instance.new("Part")
+                            p.Name = name; p.Size = size; p.Color = color; p.Material = Enum.Material.SmoothPlastic
+                            p.TopSurface = Enum.SurfaceType.Smooth; p.BottomSurface = Enum.SurfaceType.Smooth
+                            p.CanCollide = collide; p.Parent = m
+                            return p
+                        end
+                        local function joint(name, p0, p1, c0, c1)
+                            local j = Instance.new("Motor6D")
+                            j.Name = name; j.Part0 = p0; j.Part1 = p1; j.C0 = c0; j.C1 = c1; j.Parent = p0
+                        end
+                        local function build(pos)
+                            local m = Instance.new("Model")
+                            m.Name = "MarioClone"
+                            local skin, red, blue = Color3.fromRGB(254, 193, 121), Color3.fromRGB(220, 30, 30), Color3.fromRGB(40, 70, 200)
+                            local function P(name, size, color, collide)
+                                local p = Instance.new("Part")
+                                p.Name = name; p.Size = size; p.Color = color; p.Material = Enum.Material.SmoothPlastic
+                                p.TopSurface = Enum.SurfaceType.Smooth; p.BottomSurface = Enum.SurfaceType.Smooth
+                                p.CanCollide = collide; p.Parent = m
+                                return p
+                            end
+                            local hrp = P("HumanoidRootPart", Vector3.new(2, 2, 1), skin, true); hrp.Transparency = 1
+                            local torso = P("Torso", Vector3.new(2, 2, 1), red, true)
+                            local head = P("Head", Vector3.new(2, 1, 1), skin, true)
+                            local ra = P("Right Arm", Vector3.new(1, 2, 1), red, false)
+                            local la = P("Left Arm", Vector3.new(1, 2, 1), red, false)
+                            local rl = P("Right Leg", Vector3.new(1, 2, 1), blue, true)
+                            local ll = P("Left Leg", Vector3.new(1, 2, 1), blue, true)
+                            local c = CFrame.new
+                            joint("RootJoint", hrp, torso, c(0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0), c(0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0))
+                            joint("Neck", torso, head, c(0, 1, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0), c(0, -0.5, 0, -1, 0, 0, 0, 0, 1, 0, 1, 0))
+                            joint("Right Shoulder", torso, ra, c(1, 0.5, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0), c(-0.5, 0.5, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0))
+                            joint("Left Shoulder", torso, la, c(-1, 0.5, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0), c(0.5, 0.5, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0))
+                            joint("Right Hip", torso, rl, c(1, -1, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0), c(0.5, 1, 0, 0, 0, 1, 0, 1, 0, -1, 0, 0))
+                            joint("Left Hip", torso, ll, c(-1, -1, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0), c(-0.5, 1, 0, 0, 0, -1, 0, 1, 0, 1, 0, 0))
+                            local h = Instance.new("Humanoid")
+                            h.RigType = Enum.HumanoidRigType.R6
+                            h.BreakJointsOnDeath = false
+                            h.MaxHealth = 100; h.Health = 100; h.WalkSpeed = 16
+                            h.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+                            h.Parent = m
+                            Instance.new("Animator").Parent = h
+                            m.PrimaryPart = hrp
+                            m:SetAttribute("M64DevClone", true) -- tick() turns anything with this attribute into a Mario puppet
+                            m:PivotTo(CFrame.new(pos))
+                            local lastHp = 100
+                            h.HealthChanged:Connect(function(hp)
+                                    if hp < lastHp and hp > 0 then act("hurt_front", 0.5, 3) end
+                                    lastHp = hp
+                            end)
+                            h.Died:Connect(function()
+                                    task.delay(3, function()
+                                            if S.model == m and m.Parent then
+                                                local p = hrp.Position
+                                                pcall(function() CL.spawn(p + Vector3.new(0, 2, 0)) end)
+                                            end
+                                    end)
+                            end)
+                            m.Parent = workspace
+                            return m
+                        end
+                        CL = { S = S }
+                        function CL.spawn(pos)
+                            if S.model then pcall(function() S.model:Destroy() end) end
+                            S.model = build(pos or spotAt(DISTS[S.di]))
+                        end
+                        function CL.remove()
+                            if S.model then pcall(function() S.model:Destroy() end) end
+                            S.model = nil
+                        end
+                        function CL.toggle() if S.model and S.model.Parent then CL.remove() else CL.spawn() end end
+                        function CL.cycleMode()
+                            local i = table.find(MODES, S.mode) or 1
+                            S.mode = MODES[i % #MODES + 1]
+                        end
+                        function CL.toggleCombat() S.combat = not S.combat end
+                        function CL.cycleDist()
+                            S.di = S.di % #DISTS + 1
+                            local m = S.model
+                            if m and m.Parent and not m:GetAttribute("M64Held") then
+                                local p = spotAt(DISTS[S.di])
+                                m:PivotTo(CFrame.new(p))
+                                local hr = m:FindFirstChild("HumanoidRootPart")
+                                if hr then hr.AssemblyLinearVelocity = Vector3.zero end
+                            elseif not (m and m.Parent) then
+                                CL.spawn()
+                            end
+                        end
+                        function CL.kill() local h = hum(); if h then h.Health = 0 end end
+                        function CL.info()
+                            local out = {}
+                            local h = hum()
+                            local hrp = S.model and S.model:FindFirstChild("HumanoidRootPart")
+                            if h and hrp then
+                                out[1] = string.format("clone  %s  hp %.0f/%.0f  %.0f studs%s%s", S.mode, h.Health, h.MaxHealth, (hrp.Position - root.Position).Magnitude,
+                                    S.combat and "  combat" or "  peaceful", S.model:GetAttribute("M64Held") and "  HELD" or "")
+                            else
+                                out[1] = "clone  none  (press Clone: spawn)"
+                            end
+                            local B = shared.M64Battle
+                            if not B then
+                                out[2] = "music  multiplayer is off"
+                            elseif opts.combat == false or opts.battleMusic == false then
+                                out[2] = "music  OFF in menu (Combat Mode / Battle Music)"
+                            else
+                                out[2] = string.format("music  %s  beat mix %.2f  vol %.2f", B.ready and (B.active and "PLAYING" or "waiting") or "loading songs", B.mix or 0, B.master or 0)
+                            end
+                            return table.concat(out, "\n")
+                        end
+                        function CL.refreshLabels()
+                            local alive = hum() ~= nil
+                            if labels.spawn then labels.spawn.Text = alive and "Clone: remove" or "Clone: spawn" end
+                            if labels.ai then labels.ai.Text = "Clone AI: " .. S.mode end
+                            if labels.combat then labels.combat.Text = "Clone combat: " .. (S.combat and "ON" or "OFF") end
+                            if labels.dist then labels.dist.Text = "Clone place: " .. DISTS[S.di] .. " studs" end
+                        end
+                        CL.labels = labels
+                        -- the battle music treats the clone like another SM64 player with Combat Mode on
+                        local Net = shared.M64Multiplayer
+                        if Net and Net.battle and not Net.battle.devWrapped then
+                            Net.battle.devWrapped = true
+                            local orig = Net.battle.nearest
+                            Net.battle.nearest = function()
+                                local d = orig()
+                                local c = shared.M64DevCl
+                                local cm = c and c.combat and c.model
+                                if cm and cm.Parent then
+                                    local h = cm:FindFirstChildOfClass("Humanoid")
+                                    local r = cm:FindFirstChild("HumanoidRootPart")
+                                    local ch = Players.LocalPlayer.Character
+                                    local me = ch and ch:FindFirstChild("HumanoidRootPart")
+                                    if h and r and me and h.Health > 0 then
+                                        local dd = (r.Position - me.Position).Magnitude
+                                        if not d or dd < d then d = dd end
+                                    end
+                                end
+                                return d
+                            end
+                        end
+                        -- the clone's brain
+                        local aiConn
+                        aiConn = RunService.Heartbeat:Connect(function()
+                                if PK.killed or not devGui.Parent then aiConn:Disconnect() return end
+                                local m = S.model
+                                if not m or not m.Parent or not root.Parent then return end
+                                local h = m:FindFirstChildOfClass("Humanoid")
+                                local hrp = m:FindFirstChild("HumanoidRootPart")
+                                if not h or not hrp or h.Health <= 0 then return end
+                                if hrp.Position.Y < -300 then CL.spawn(); return end -- fell out of the map
+                                if m:GetAttribute("M64Held") or h.PlatformStand then return end
+                                local me = root.Position
+                                local off = Vector3.new(me.X - hrp.Position.X, 0, me.Z - hrp.Position.Z)
+                                local dist = off.Magnitude
+                                if S.mode == "IDLE" then
+                                    h:MoveTo(hrp.Position)
+                                elseif S.mode == "FOLLOW" then
+                                    h.WalkSpeed = 16
+                                    if dist > 9 then h:MoveTo(me) else h:MoveTo(hrp.Position) end
+                                else -- FIGHT
+                                    h.WalkSpeed = 20
+                                    if dist > 3.8 then
+                                        h:MoveTo(me)
+                                    else
+                                        h:MoveTo(hrp.Position)
+                                        if os.clock() >= S.nextAtk and humanoid.Health > 0 and dist > 0.1 then
+                                            S.nextAtk = os.clock() + 1.4
+                                            S.atkIdx = S.atkIdx % 3 + 1
+                                            hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(me.X, hrp.Position.Y, me.Z))
+                                            act(({ "first_punch", "second_punch", "ground_kick" })[S.atkIdx], 0.5, 7)
+                                            task.delay(0.18, function()
+                                                    if not (m.Parent and h.Health > 0 and not m:GetAttribute("M64Held")) then return end
+                                                    if (shared.M64Opts or {}).combat == false or humanoid.Health <= 0 then return end
+                                                    local o2 = Vector3.new(root.Position.X - hrp.Position.X, 0, root.Position.Z - hrp.Position.Z)
+                                                    if o2.Magnitude < 6 and o2.Magnitude > 0.05 then
+                                                        humanoid:TakeDamage(6)
+                                                        root.AssemblyLinearVelocity = o2.Unit * 40 + Vector3.new(0, 22, 0)
+                                                    end
+                                            end)
+                                        end
+                                    end
+                                end
+                        end)
+                        return CL
+                    end)()
+                    CL.labels.spawn = btn("Clone: spawn", 4, function() CL.toggle() end)
+                    CL.labels.ai = btn("Clone AI: IDLE", 5, function() CL.cycleMode() end)
+                    CL.labels.combat = btn("Clone combat: ON", 6, function() CL.toggleCombat() end)
+                    CL.labels.dist = btn("Clone place: 12 studs", 7, function() CL.cycleDist() end)
+                    btn("Clone: kill", 8, function() CL.kill() end)
+                    CL.refreshLabels()
                     local acc, fps = 0, 60
                     local function onoff(b) return b and "on" or "off" end
                     local devConn
@@ -7355,6 +7579,7 @@ local function main(character, mode)
                             acc = 0
                             box.Visible = opts.dev == true
                             if not box.Visible then return end
+                            pcall(CL.refreshLabels)
                             local who = PK.luigi and "LUIGI" or (PK.stant and "STANT" or (PK.kit and "THE KIT" or "MARIO"))
                             local v, p = root.AssemblyLinearVelocity, root.Position
                             local cam = workspace.CurrentCamera
@@ -7369,6 +7594,7 @@ local function main(character, mode)
                                     string.format("cam    follow %s  fov %.0f", onoff(opts.camFollow ~= false), cam and cam.FieldOfView or 0),
                                     "face   " .. tostring(PC.FaceLock or "AUTO"),
                                     "wipe   " .. tostring(W.mode or "off"),
+                                    CL.info(),
                                 }, "\n")
                     end)
                 end
@@ -7548,7 +7774,9 @@ local function main(character, mode)
             pcall(function() root.Anchored = false; root.AssemblyLinearVelocity = snap.vel or Vector3.zero end)
         end
     end
-    shared.PursuitMarioReg[character] = { mode = mode, kill = PK.kill, luigi = PK.luigi, kit = PK.kit, stant = PK.stant, snapshot = PK.snapshot }
+    shared.PursuitMarioReg[character] = { mode = mode, kill = PK.kill, luigi = PK.luigi, kit = PK.kit, stant = PK.stant, snapshot = PK.snapshot,
+        -- dev clone: make a puppet Mario play one of his own moves for a moment
+        devAct = function(anim, dur, face) _M.devAct = { anim = anim, untilT = os.clock() + (dur or 0.5), face = face or 7, fresh = true } end }
     if not PK.netpeer and shared.M64Multiplayer then
         local net = shared.M64Multiplayer
         net.initAnimations(_M.MAP)
@@ -8135,6 +8363,14 @@ local function main(character, mode)
                         return
                     end
                 end
+                if _M.devAct and os.clock() < _M.devAct.untilT then
+                    local da = _M.devAct
+                    if da.fresh then da.fresh = false; curName = nil end
+                    play(da.anim, 1, 0.04)
+                    if PC.FaceLock == nil then pcall(function() character:SetAttribute("M64Face", da.face) end) end
+                    lastFace = nil
+                    return
+                end
                 if animObj then
                     for _, t in ipairs(animObj:GetPlayingAnimationTracks()) do
                         if not known[t] then
@@ -8174,7 +8410,10 @@ local function main(character, mode)
                     local v = root.AssemblyLinearVelocity
                     local hs = flat(v).Magnitude
                     local air = stt == Enum.HumanoidStateType.Freefall or stt == Enum.HumanoidStateType.Jumping
-                    if stt == Enum.HumanoidStateType.Swimming then
+                    if character:GetAttribute("M64Held") then
+                        play("being_held", 1, 0.1)
+                        face = 3
+                    elseif stt == Enum.HumanoidStateType.Swimming then
                         play(hs > 2 and "swim" or "swim_idle", 1, 0.1)
                     elseif stt == Enum.HumanoidStateType.Climbing then
                         play("ledge_idle", 1, 0.1)
@@ -9521,7 +9760,7 @@ local function tick()
             local runningPeer = Players:GetPlayerFromCharacter(m)
             local isPeer = runningPeer and net and net.peers[runningPeer] and net.peers[runningPeer].mario
             if not isPeer then
-                local want = PC.Enabled and g and swapMatch(m)
+                local want = m:GetAttribute("M64DevClone") == true or (PC.Enabled and g and swapMatch(m))
                 local cur = REG[m]
                 if cur and (not want or cur.luigi ~= (PC.Luigi == true)
                         or cur.kit ~= (PC.Kit == true and PC.Luigi ~= true)
