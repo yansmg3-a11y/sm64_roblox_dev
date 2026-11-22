@@ -2985,6 +2985,7 @@ local function main(character, mode)
         return false
     end
     local function dealHit(h, model, dmg, kind)
+        if (shared.M64Opts or {}).combat == false then return end -- SM64 menu > Combat Mode is off: nobody gets hurt
         local target = _M.Players:GetPlayerFromCharacter(model)
         if target and target ~= player then
             local net = shared.M64Multiplayer
@@ -5611,6 +5612,7 @@ local function main(character, mode)
                 { "  Steps Rescan", function() return opts.customSteps ~= false end, function() local T = _M.STEPS; T.scanned = false; T.scan(true) end, function() return opts.customSteps ~= false end, function() return "Rescan the GitHub steps folder  (tap = read it again)" end, _M.MUS.blue },
                 { "Nintendo Pad Layout", function() return opts.nintendoPad == true end, function() opts.nintendoPad = not (opts.nintendoPad == true) end, nil, function() return (opts.nintendoPad == true) and "Controller:  Nintendo layout  (right button = jump, bottom button = punch)" or "Controller:  Xbox layout  (A / bottom = jump, X or B = punch)" end },
                 { "Credits", function() return true end, function() end, nil, function() return "Credits:  Multiplayer by Error101_s" end, _M.MUS.blue },
+                { "Combat Mode", function() return opts.combat ~= false end, function() opts.combat = not (opts.combat ~= false) end, nil, function() return (opts.combat ~= false) and "Combat Mode:  ON  (punches, kicks and pounds hurt)" or "Combat Mode:  OFF  (nobody is hurt by Mario's moves)" end },
                 { "Dev Screen", function() return opts.dev == true end, function() opts.dev = not (opts.dev == true) end },
                 { "N64 Controller Display", function() return opts.padHud ~= false end, function() opts.padHud = not (opts.padHud ~= false) end },
                 { "Unfreeze Mario (Anti-Lock)", function() return opts.antiLock ~= false end, function() opts.antiLock = not (opts.antiLock ~= false) end, nil, function() local a = shared.M64AntiLock; local on = opts.antiLock ~= false; return "Anti-Lock " .. (on and "ON" or "OFF") .. ":  frees Mario when a game locks him (anchored, frozen, controls off)" .. ((a and a.fixes > 0) and ("  ::  fixed " .. a.fixes .. "x, last: " .. a.last) or "") end },
@@ -7557,6 +7559,7 @@ local function main(character, mode)
                 return {
                     height = CFG.ModelHeight,
                     accurate = CFG.Tog and CFG.Tog.size() or false,
+                    combatOff = (shared.M64Opts or {}).combat == false,
                     mimic = _M.mimicOn ~= false,
                     wing = FXS.wing,
                     metal = FXS.metal,
@@ -8334,6 +8337,8 @@ do
     local nonce = math.random(0, 255)
     function Net.sendAttack(victim, damage, kind)
         if not victim or not attackIndex[kind] or not Net.peers[victim] or not Net.peers[victim].mario then return end
+        if (shared.M64Opts or {}).combat == false then return end
+        if Net.peers[victim].settings and Net.peers[victim].settings.combatOff then return end -- that player has Combat Mode off
         nonce = (nonce+1)%256
         local bytes = {}
         local id = victim.UserId
@@ -8607,7 +8612,7 @@ do
             peer.pose = {anim = anim or "idle", speed = math.max(0.1, d[3]/30), face = math.clamp(d[4], 1, 7),
                 healthFraction = d[5]/255, stateCode = d[6], receivedAt = os.clock()}
         elseif msg == SETTINGS then
-            if #d ~= 3 or d[1] < 40 or d[1] > 200 or d[2] > 63 or d[3] > 7 then return end
+            if #d ~= 3 or d[1] < 40 or d[1] > 200 or d[2] > 127 or d[3] > 7 then return end
             local flags = d[2]
             peer.settings = {
                 height = d[1] / 20,
@@ -8617,6 +8622,7 @@ do
                 mimic = bit32.band(flags, 4) ~= 0,
                 filter = bit32.band(flags, 16) ~= 0,
                 gliding = bit32.band(flags, 32) ~= 0,
+                combatOff = bit32.band(flags, 64) ~= 0,
                 face = d[3],
             }
         elseif msg == FX then
@@ -8650,6 +8656,7 @@ do
             local to = 0
             for j = 1, 5 do to = to*256+d[j] end
             if to ~= localPlayer.UserId then return end
+            if (shared.M64Opts or {}).combat == false then return end -- Combat Mode is off
             local damage = readU16(d, 6)/10
             local kind = attackNames[d[8]]
             if not kind or damage <= 0 or damage>MAX_DAMAGE[kind]*1.01 then return end
@@ -8767,7 +8774,7 @@ do
         if not ok or not settings then return end
         local height = math.clamp(math.floor((settings.height or 5) * 20 + 0.5), 40, 200)
         local flags = (settings.wing and 1 or 0) + (settings.metal and 2 or 0)
-            + (settings.mimic and 4 or 0) + (settings.accurate and 8 or 0)
+            + (settings.mimic and 4 or 0) + (settings.accurate and 8 or 0) + (settings.combatOff and 64 or 0)
             + (settings.filter and 16 or 0) + (settings.gliding and 32 or 0)
         local face = math.clamp(tonumber(settings.face) or 0, 0, 7)
         local data = {height, flags, face}
