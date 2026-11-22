@@ -124,9 +124,9 @@ do
                         gui.DisplayOrder = 90
                         gui.Parent = pg
 
-                        local W, H = 290, 84
+                        local W, H = 290, 106 -- (the card is taller now: room for the credit line at the bottom)
                         local MX, MW, MH = 46, 48, 64 -- Mario: centre x, width, height inside the card
-                        local FLOOR = H - 10
+                        local FLOOR = 84 - 10 -- Mario's floor stays where it was
                         local card = Instance.new("Frame")
                         card.AnchorPoint = Vector2.new(1, 1)
                         card.Size = UDim2.fromOffset(W, H)
@@ -172,6 +172,17 @@ do
                         body.Text = hint
                         body.TextTransparency = 1
                         body.Parent = card
+                        local credit = Instance.new("TextLabel") -- bottom-left of the card
+                        credit.BackgroundTransparency = 1
+                        credit.Position = UDim2.fromOffset(12, 82)
+                        credit.Size = UDim2.fromOffset(W - 24, 18)
+                        credit.TextXAlignment = Enum.TextXAlignment.Left
+                        credit.Font = Enum.Font.GothamMedium
+                        credit.TextSize = 12
+                        credit.TextColor3 = Color3.fromRGB(140, 200, 255)
+                        credit.Text = "Multiplayer by Error101_s"
+                        credit.TextTransparency = 1
+                        credit.Parent = card
 
                         local shadow = Instance.new("Frame")
                         shadow.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -268,6 +279,7 @@ do
                         task.wait(0.25)
                         tween(title, 0.3, { TextTransparency = 0 })
                         tween(body, 0.3, { TextTransparency = 0 })
+                        tween(credit, 0.3, { TextTransparency = 0 })
                         task.wait(0.45)
                         -- 2) then Mario shows up
                         if marioFront then tween(hero, 0.2, { ImageTransparency = 0 }) else tween(hero, 0.2, { BackgroundTransparency = 0 }) end
@@ -1774,10 +1786,11 @@ local function main(character, mode)
         -- Pursuitcore copy mode (Mario only copies the game's moves): the gamepad B / X button fires the item or the game's attack
         if PK.puppet then
             UIS.InputBegan:Connect(function(input, gpe)
-                    if gpe or _M.menuBlock or PK.killed then return end
-                    local k = input.KeyCode
+                    local onPad = string.sub(input.UserInputType.Name, 1, 7) == "Gamepad"
+                    if (gpe and not onPad) or _M.menuBlock or PK.killed then return end
+                    local k = _M.pk(input.KeyCode)
                     if k == Enum.KeyCode.ButtonB or k == Enum.KeyCode.ButtonX then
-                        _M.attackSrc = "key"; _M.attackKeyCode = k
+                        _M.attackSrc = "key"; _M.attackKeyCode = input.KeyCode
                         if _M.useHeldItem and _M.useHeldItem() then return end
                         pcall(_M.fireGameAttack)
                     end
@@ -2110,10 +2123,20 @@ local function main(character, mode)
     local function fresh(k, win) return os.clock() - press[k] < (win or 0.15) end
     local function eat(k) press[k] = -1 end
     local touchJumpHeld = false
+    -- controller layout: with "Nintendo Pad Layout" on, A <-> B and X <-> Y are swapped (Nintendo pads have A on the right and B at the bottom)
+    function _M.pk(k)
+        if (shared.M64Opts or {}).nintendoPad == true then
+            if k == Enum.KeyCode.ButtonA then return Enum.KeyCode.ButtonB
+            elseif k == Enum.KeyCode.ButtonB then return Enum.KeyCode.ButtonA
+            elseif k == Enum.KeyCode.ButtonX then return Enum.KeyCode.ButtonY
+            elseif k == Enum.KeyCode.ButtonY then return Enum.KeyCode.ButtonX end
+        end
+        return k
+    end
     local function jumpHeld()
         if _M.menuBlock then return false end
         return UIS:IsKeyDown(Enum.KeyCode.Space)
-        or UIS:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonA)
+        or UIS:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, _M.pk(Enum.KeyCode.ButtonA))
         or touchJumpHeld
         or touchJumpHeld
         or os.clock() - lastJumpPress < 0.25
@@ -2128,7 +2151,7 @@ local function main(character, mode)
     end)
     UIS.InputBegan:Connect(function(input)
             if UIS:GetFocusedTextBox() or _M.menuBlock then return end
-            if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA then
+            if input.KeyCode == Enum.KeyCode.Space or _M.pk(input.KeyCode) == Enum.KeyCode.ButtonA then
                 press.jump = os.clock()
                 lastJumpPress = os.clock()
             end
@@ -2141,11 +2164,13 @@ local function main(character, mode)
     end)
     local function isZ(k) return k == Enum.KeyCode.ButtonL2 or k == Enum.KeyCode.ButtonR2 or k == Enum.KeyCode.ButtonL1 end
     UIS.InputBegan:Connect(function(input, gpe)
-            if gpe or _M.menuBlock then return end
-            local k = input.KeyCode
+            local onPad = string.sub(input.UserInputType.Name, 1, 7) == "Gamepad"
+            if (gpe and not onPad) or _M.menuBlock or UIS:GetFocusedTextBox() then return end
+            local rawK = input.KeyCode
+            local k = _M.pk(rawK)
             if k == Enum.KeyCode.E or k == Enum.KeyCode.ButtonX or k == Enum.KeyCode.ButtonB or input.UserInputType == Enum.UserInputType.MouseButton1 then
                 _M.attackSrc = (input.UserInputType == Enum.UserInputType.MouseButton1) and "mouse" or "key"
-                _M.attackKeyCode = (input.UserInputType == Enum.UserInputType.MouseButton1) and Enum.UserInputType.MouseButton1 or k
+                _M.attackKeyCode = (input.UserInputType == Enum.UserInputType.MouseButton1) and Enum.UserInputType.MouseButton1 or rawK
                 pressAttack()
             elseif k == Enum.KeyCode.C or k == Enum.KeyCode.LeftControl or isZ(k) then
                 pressCrouch()
@@ -5584,6 +5609,8 @@ local function main(character, mode)
                 { "  Music Volume", function() return opts.music == true end, function() local M = _M.MUS; M.vol = M.vol >= 1 and 0.25 or M.vol + 0.25; M.sound() end, function() return opts.music == true end, function() return "Music volume:  " .. math.floor(_M.MUS.vol * 100 + 0.5) .. "%  (tap = change)" end, _M.MUS.blue },
                 { "Custom Steps", function() return opts.customSteps ~= false end, function() opts.customSteps = not (opts.customSteps ~= false) end, nil, function() local T = _M.STEPS; if opts.customSteps == false then return "Custom Steps:  off  (normal steps)" end return "Custom Steps:  " .. (T.status ~= "" and T.status or "on") end, _M.MUS.blue },
                 { "  Steps Rescan", function() return opts.customSteps ~= false end, function() local T = _M.STEPS; T.scanned = false; T.scan(true) end, function() return opts.customSteps ~= false end, function() return "Rescan the GitHub steps folder  (tap = read it again)" end, _M.MUS.blue },
+                { "Nintendo Pad Layout", function() return opts.nintendoPad == true end, function() opts.nintendoPad = not (opts.nintendoPad == true) end, nil, function() return (opts.nintendoPad == true) and "Controller:  Nintendo layout  (right button = jump, bottom button = punch)" or "Controller:  Xbox layout  (A / bottom = jump, X or B = punch)" end },
+                { "Credits", function() return true end, function() end, nil, function() return "Credits:  Multiplayer by Error101_s" end, _M.MUS.blue },
                 { "Dev Screen", function() return opts.dev == true end, function() opts.dev = not (opts.dev == true) end },
                 { "N64 Controller Display", function() return opts.padHud ~= false end, function() opts.padHud = not (opts.padHud ~= false) end },
                 { "Unfreeze Mario (Anti-Lock)", function() return opts.antiLock ~= false end, function() opts.antiLock = not (opts.antiLock ~= false) end, nil, function() local a = shared.M64AntiLock; local on = opts.antiLock ~= false; return "Anti-Lock " .. (on and "ON" or "OFF") .. ":  frees Mario when a game locks him (anchored, frozen, controls off)" .. ((a and a.fixes > 0) and ("  ::  fixed " .. a.fixes .. "x, last: " .. a.last) or "") end },
@@ -5641,6 +5668,7 @@ local function main(character, mode)
                             local ringC = pimg(RING, 103, 95)
                             local pieC = {}
                             for i = 1, 8 do pieC[i] = pimg(PIES[i], 60, 54) end -- pieC[1] is a full pie (8), pieC[8] is one red wedge (1)
+                            shared.M64Meter = { ring = ringC, pies = pieC } -- the meter over other players' heads uses the same pictures
                             local pg2 = Instance.new("ScreenGui")
                             pg2.Name = "M64Power"; pg2.ResetOnSpawn = false; pg2.IgnoreGuiInset = true; pg2.DisplayOrder = 55
                             pg2.Parent = PlayerGui
@@ -6066,7 +6094,7 @@ local function main(character, mode)
                         end
                         fxTrack(UIS.InputBegan:Connect(function(input)
                                     if not M64UI.open then return end
-                                    local k = input.KeyCode
+                                    local k = _M.pk(input.KeyCode)
                                     if k == Enum.KeyCode.DPadLeft then moveGlove(-1, 0)
                                     elseif k == Enum.KeyCode.DPadRight then moveGlove(1, 0)
                                     elseif k == Enum.KeyCode.DPadUp then moveGlove(0, -1)
@@ -7115,7 +7143,7 @@ local function main(character, mode)
                 local lastW = 0
                 local function down(keys)
                     for _, k in ipairs(keys) do
-                        local ok, v = pcall(UIS.IsGamepadButtonDown, UIS, padType, k)
+                        local ok, v = pcall(UIS.IsGamepadButtonDown, UIS, padType, _M.pk(k))
                         if ok and v then return true end
                     end
                     return false
@@ -7625,6 +7653,26 @@ local function main(character, mode)
             healthFill.BackgroundColor3 = Color3.fromRGB(60, 210, 75)
             healthFill.Size = UDim2.fromScale(1, 1)
             healthFill.Parent = healthTrack
+            -- SM64 power meter over the head (the same pie as the one in the corner); the little green bar is used until its pictures are ready
+            local meterGui = Instance.new("BillboardGui")
+            meterGui.Name = "M64PeerMeter"
+            meterGui.Adornee = root
+            meterGui.Size = UDim2.fromOffset(52, 48)
+            meterGui.StudsOffset = Vector3.new(0, CFG.ModelHeight*0.63+1+1.9, 0)
+            meterGui.AlwaysOnTop = false
+            meterGui.MaxDistance = 90
+            meterGui.Enabled = false
+            meterGui.Parent = effectsFolder
+            local meterRing = Instance.new("ImageLabel")
+            meterRing.BackgroundTransparency = 1
+            meterRing.Size = UDim2.fromScale(1, 1)
+            meterRing.Parent = meterGui
+            local meterPie = Instance.new("ImageLabel")
+            meterPie.BackgroundTransparency = 1
+            meterPie.Position = UDim2.fromScale(27 / 103, 26 / 95)
+            meterPie.Size = UDim2.fromScale(57 / 103, 51 / 95)
+            meterPie.Parent = meterRing
+            local meterReady = false
             local groundColor = Color3.fromRGB(190, 190, 190)
             local groundRay = RaycastParams.new()
             groundRay.FilterType = Enum.RaycastFilterType.Exclude
@@ -7880,6 +7928,19 @@ local function main(character, mode)
                     if pose and pose.anim and age<2 then
                         name = pose.anim
                         speed = math.clamp(pose.speed or 1, 0.1, 5)
+                        -- the pose message arrives a little late: for plain idle / walk / run use the live speed, so he starts and stops with his body
+                        if (name == "idle" or name == "walking" or name == "running") and humanoid.Health > 0 then
+                            if inAir then
+                                name = v.Y > 3 and "single_jump" or "general_fall"
+                                speed = 1
+                            else
+                                local live = hs > 17 and "running" or hs > 2 and "walking" or "idle"
+                                if live ~= name then
+                                    name = live
+                                    speed = math.clamp(hs / 18, 0.7, 1.8)
+                                end
+                            end
+                        end
                     else
                         if humanoid.Health <= 0 then name = "dying"
                         elseif humState == Enum.HumanoidStateType.Swimming then name = hs>2 and "swim" or "swim_idle"
@@ -7948,6 +8009,20 @@ local function main(character, mode)
                     local fraction = math.clamp(peer.predictedHealth or humanoid.Health/math.max(humanoid.MaxHealth, 1), 0, 1)
                     healthFill.Size = UDim2.fromScale(fraction, 1)
                     healthFill.BackgroundColor3 = fraction<0.3 and Color3.fromRGB(235, 75, 65) or Color3.fromRGB(60, 210, 75)
+                    local MI = shared.M64Meter
+                    if MI then
+                        if not meterReady then
+                            meterReady = true
+                            meterRing.ImageContent = MI.ring
+                        end
+                        local meterOn = shared.M64Opts == nil or shared.M64Opts.powerMeter ~= false -- SM64 menu > Power Meter
+                        meterGui.Enabled = meterOn
+                        healthTrack.Visible = not meterOn
+                        local w = fraction <= 0 and 0 or math.clamp(math.ceil(fraction * 8 - 1e-4), 1, 8)
+                        meterPie.Visible = w > 0
+                        if w > 0 then meterPie.ImageContent = MI.pies[9 - w] end
+                        meterPie.ImageTransparency = (w > 0 and w <= 2 and math.floor(os.clock() * 4) % 2 == 0) and 0.45 or 0 -- blinks when low, like SM64
+                    end
 
                     if hs>3 and not inAir and (name == "walking" or name == "running" or name == "slow_walk" or name == "tiptoe") then
                         stepTimer-=dt
@@ -8136,6 +8211,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local localPlayer = Players.LocalPlayer
 local REG = shared.PursuitMarioReg
+-- Multiplayer by Error101_s
 -- Animation tracks carry compact peer messages. Game damage remains server-owned.
 do
     local Net = {
@@ -8156,7 +8232,7 @@ do
         r6 = {507766666, 507766951, 507777826, 507767714, 507765000, 507767968, 507765644, 507784897},
         r15 = {180435571, 180435792, 180426354, 125750702, 180436148, 180436334, 178130996, 182393478}
     }
-    local CARRIER_COUNT, FRAME_DATA_BYTES, FRAME_INTERVAL = 8, 20, 0.15
+    local CARRIER_COUNT, FRAME_DATA_BYTES, FRAME_INTERVAL = 8, 20, 0.08 -- FRAME_INTERVAL: seconds between data frames (smaller = less delay; if other players' animations start to glitch, raise it again, e.g. 0.11)
     local HELLO, POSE, SOUND, HIT, WORLD_SET, WORLD_REMOVE, ACTION, FX, SETTINGS = 169, 170, 171, 172, 173, 174, 175, 176, 177
     local SOUND_NAMES = {"jump","jump2","jump3","longjump","backflip","wallkick","punch","kick","dive","pound","land","tripleland","hurt","death","bonk","flap","cap"}
     local soundIndex = {}
@@ -8647,7 +8723,7 @@ do
     local function publishPose()
         if not Net.snapshot or Net.localCharacter ~= localPlayer.Character or not Net.animLoaded then return end
         if os.clock()<nextPose then return end
-        nextPose = os.clock()+0.16
+        nextPose = os.clock()+0.08 -- how often the pose (what Mario is doing) is sent
         local ok, s = pcall(Net.snapshot)
         if not ok or not s then return end
         local anim = s.anim or "idle"
