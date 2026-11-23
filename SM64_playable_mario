@@ -57,7 +57,7 @@ end
 -- (the "got star" move). Set SHOW_LOAD_POPUP to false to turn it off. Needs Allow Mesh / Image APIs for the pictures
 -- (without it a red "M" badge and a star symbol are shown instead).
 do
-    local SHOW_LOAD_POPUP = true
+    local SHOW_LOAD_POPUP = shared.M64RenderOnly ~= true
     if SHOW_LOAD_POPUP then
         task.spawn(function()
                 local okP, errP = pcall(function()
@@ -2991,6 +2991,9 @@ local function main(character, mode)
             local net = shared.M64Multiplayer
             if net and net.peers[target] and net.peers[target].mario then
                 net.sendAttack(target, dmg, kind)
+            elseif net and net.peers[target] and net.sendSteveAttack then
+                -- that player runs the Minecraft Steve script
+                net.sendSteveAttack(target, dmg, root.Position)
             end
             return
         end
@@ -7793,6 +7796,8 @@ local function main(character, mode)
     shared.PursuitMarioReg[character] = { mode = mode, kill = PK.kill, luigi = PK.luigi, kit = PK.kit, stant = PK.stant, snapshot = PK.snapshot,
         -- dev clone: make a puppet Mario play one of his own moves for a moment
         devAct = function(anim, dur, face) _M.devAct = { anim = anim, untilT = os.clock() + (dur or 0.5), face = face or 7, fresh = true } end }
+    -- other players' poses are sent as animation numbers: the draw-only copy needs the same list to read them
+    if PK.netpeer and shared.M64Multiplayer then shared.M64Multiplayer.initAnimations(_M.MAP) end
     if not PK.netpeer and shared.M64Multiplayer then
         local net = shared.M64Multiplayer
         net.initAnimations(_M.MAP)
@@ -8656,11 +8661,13 @@ do
     end
     pcall(function() game:GetService("RunService"):UnbindFromRenderStep("M64BattleBeat") end)
     -- runs just after Roblox's camera, so the movement is added on top of the normal camera
-    game:GetService("RunService"):BindToRenderStep("M64BattleBeat", Enum.RenderPriority.Camera.Value + 1, function(dt) pcall(Net.battle.step, dt) end)
-    task.defer(function()
-        task.wait(3)
-        if (shared.M64Opts or {}).battleMusic ~= false then Net.battle.prepare() end
-    end)
+    if not shared.M64RenderOnly then
+        game:GetService("RunService"):BindToRenderStep("M64BattleBeat", Enum.RenderPriority.Camera.Value + 1, function(dt) pcall(Net.battle.step, dt) end)
+        task.defer(function()
+            task.wait(3)
+            if (shared.M64Opts or {}).battleMusic ~= false then Net.battle.prepare() end
+        end)
+    end
 
     local CARRIER_IDS = {
         r6 = {507766666, 507766951, 507777826, 507767714, 507765000, 507767968, 507765644, 507784897},
@@ -8784,6 +8791,73 @@ do
         task.delay(0.22, function()
                 if Net.active and Net.peers[victim] and Net.peers[victim].mario then enqueue(HIT, bytes, nil, true) end
         end)
+    end
+
+    -- Minecraft Steve players read their own attack message (type 7): victim id, damage in Steve health (20 = full),
+    -- direction, nonce. Mario hits become a share of Steve's 20 health: punch 8% = 1.6, ground pound 25% = 5.
+    local STEVE_ATTACK = 7
+    -- Minecraft Steve: when another player runs it, this script starts Steve in view-only mode so Steve players, blocks and mobs
+    -- show up. Only Steve testers get it (Steve checks that itself and stays silent for everyone else). Put the raw link of the
+    -- Steve launcher here; empty = use a local copy from the executor workspace.
+    local STEVE_LAUNCHER_URL = ""
+    function Net.steveSeen()
+        if Net.steveLoading or rawget(_G, "SteveWorld") or shared.M64RenderOnly then return end
+        Net.steveLoading = true
+        task.spawn(function()
+            local src
+            if STEVE_LAUNCHER_URL ~= "" then pcall(function() src = game:HttpGet(STEVE_LAUNCHER_URL) end) end
+            if not src and isfile and readfile then
+                for _, f in ipairs({"SteveDev/steve.luau", "Minecraft Steve.luau", "Minecraft Steve"}) do
+                    local okF, has = pcall(isfile, f)
+                    if okF and has then src = readfile(f); break end
+                end
+            end
+            if not src then Net.steveLoading = false; return end
+            shared.SteveObserver = true
+            local fn = loadstring(src, "@Steve")
+            if fn then pcall(fn) end
+        end)
+    end
+    function Net.sendSteveAttack(victim, damage, from)
+        if not Net.active or shared.M64RenderOnly or not victim or not Net.peers[victim] or Net.peers[victim].mario then return end
+        local vc = victim.Character
+        local vr = vc and vc:FindFirstChild("HumanoidRootPart")
+        if not vr or typeof(from) ~= "Vector3" then return end
+        local dir = vr.Position - from
+        local bytes = {}
+        local id = victim.UserId
+        for j = 4, 0, -1 do bytes[#bytes+1] = math.floor(id/256^j)%256 end
+        u16(bytes, math.clamp(math.floor(damage / 100 * 20 * 10 + 0.5), 0, 65535))
+        bytes[#bytes+1] = math.floor((math.atan2(dir.X, dir.Z) / (2*math.pi) + 0.5) * 255 + 0.5) % 256
+        nonce = (nonce+1)%256
+        bytes[#bytes+1] = nonce
+        enqueue(STEVE_ATTACK, bytes, nil, true)
+        task.delay(0.16, function() if Net.active then enqueue(STEVE_ATTACK, bytes, nil, true) end end)
+    end
+    -- a Steve player hit this Mario: Steve damage (out of 20) becomes 60% of that share of Mario's health, never more than
+    -- a ground pound (25%), so a critical stone sword (7.5) takes 22.5% instead of nearly all of it
+    local steveHits = {}
+    local function steveHit(peer, d)
+        if shared.M64RenderOnly or #d < 8 then return end
+        local to = 0
+        for j = 1, 5 do to = to*256+d[j] end
+        if to ~= localPlayer.UserId % 256^5 then return end
+        if (shared.M64Opts or {}).combat == false then return end
+        if d[9] then
+            local k = tostring(peer.player.UserId) .. ":" .. d[9]
+            if steveHits[k] and os.clock()-steveHits[k] < 3 then return end
+            steveHits[k] = os.clock()
+        end
+        local char = localPlayer.Character
+        local victim = char and char:FindFirstChildOfClass("Humanoid")
+        local victimRoot = char and char:FindFirstChild("HumanoidRootPart")
+        local origin = peer.player.Character and peer.player.Character:FindFirstChild("HumanoidRootPart")
+        if not victim or not victimRoot or not origin or victim.Health <= 0 then return end
+        if (victimRoot.Position-origin.Position).Magnitude > 24 then return end
+        local frac = math.min(0.25, readU16(d, 6) / 10 / 20 * 0.6)
+        pcall(function() victim:TakeDamage(frac * victim.MaxHealth) end)
+        local a = (d[8] / 255 - 0.5) * 2 * math.pi
+        pcall(function() victimRoot.AssemblyLinearVelocity = Vector3.new(math.sin(a), 0, math.cos(a)) * 30 + Vector3.new(0, 20, 0) end)
     end
 
     local function disconnectTracks()
@@ -9026,6 +9100,12 @@ do
             end
             return
         end
+        if msg == STEVE_ATTACK then steveHit(peer, d) return end
+        if msg < 100 and not peer.mario then
+            -- any low-numbered message is a Minecraft Steve player
+            if not peer.steve then peer.steve = true; pcall(Net.steveSeen) end
+            return
+        end
         if not peer.mario then return end
         if msg == ACTION then
             if #d ~= 2 then return end
@@ -9219,13 +9299,16 @@ do
     local nextPeerScan, nextHello = 0, 0
     Net.connections[#Net.connections+1] = RunService.Heartbeat:Connect(function()
             if not Net.active then return end
-            if os.clock() >= nextHello then
-                nextHello = os.clock()+2
-                enqueue(HELLO, {77, 54, 3}, nil, true)
+            -- render-only (inside the Steve script): Steve owns the carrier tracks, so this side only listens
+            if not shared.M64RenderOnly then
+                if os.clock() >= nextHello then
+                    nextHello = os.clock()+2
+                    enqueue(HELLO, {77, 54, 3}, nil, true)
+                end
+                publishSettings()
+                publishPose()
+                publishFrame()
             end
-            publishSettings()
-            publishPose()
-            publishFrame()
             if os.clock()<nextPeerScan then return end
             nextPeerScan = os.clock()+0.04
             for _, p in ipairs(Players:GetPlayers()) do
@@ -9710,7 +9793,7 @@ local function buildMenu()
     end)
     refreshMenu()
 end
-task.spawn(function() pcall(buildMenu) end)
+if not shared.M64RenderOnly then task.spawn(function() pcall(buildMenu) end) end
 
 local unknownSince = nil
 local function tick()
@@ -9728,7 +9811,7 @@ local function tick()
     if g == nil then g = PC.UnknownIsGame end
     -- my own character
     local char = localPlayer.Character
-    if char and char.Parent and char:FindFirstChildOfClass("Humanoid") then
+    if char and char.Parent and char:FindFirstChildOfClass("Humanoid") and not shared.M64RenderOnly then
         local want = nil
         if not PC.Enabled then want = "play"
         elseif g then want = PC.Playable and "play" or "puppet" end
@@ -9776,7 +9859,7 @@ local function tick()
             end
         end
     end
-    for m in pairs(tracked) do
+    for m in pairs(shared.M64RenderOnly and {} or tracked) do
         if not m:IsDescendantOf(workspace) then
             if REG[m] then REG[m].kill() end
             tracked[m] = nil
@@ -9799,7 +9882,7 @@ local function tick()
             end
         end
     end
-    pcall(iconSweep)
+    if not shared.M64RenderOnly then pcall(iconSweep) end
     if refreshMenu then pcall(refreshMenu) end
 end
 local lastEnabled = PC.Enabled
