@@ -2085,7 +2085,7 @@ local function main(character, mode)
         for j = 1, #ROT do
             local cf
             if j == 1 then cf = CFrame.new(pos) * CFrame.fromAxisAngle(CFG.BodyPitchAxis, bodyPitch * CFG.BodyPitchSign) * pose[j]
-            elseif ROT[j] == "Torso" then cf = CFrame.new(nodeT[j] + Vector3.new(0, torsoFwd * 0.07 * posScale, 0)) * tilt * pose[j]
+            elseif ROT[j] == "Torso" then cf = CFrame.new(nodeT[j] + Vector3.new(0, torsoFwd * 0.13 * posScale, 0)) * tilt * pose[j]
             elseif ROT[j] == "Head" and _M.headYaw then
                 cf = CFrame.new(nodeT[j]) * pose[j] * CFrame.fromAxisAngle(Vector3.new(1, 0, 0), _M.headYaw * CFG.HeadYawSign) * CFrame.fromAxisAngle(Vector3.new(0, 0, 1), _M.headPitch * CFG.HeadPitchSign)
             else cf = CFrame.new(nodeT[j]) * pose[j] end
