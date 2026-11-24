@@ -3214,7 +3214,8 @@ local function main(character, mode)
                 launch("Backflip", CFG.BackflipV, -dirOf(faceYaw) * CFG.BackflipBack, faceYaw)
             end
         elseif state == "Skid" then
-            launch("SideFlip", CFG.SideFlipV, dirOf(skidFace) * CFG.SideFlipSpeed, skidFace + math.pi) -- faces backwards: the flip turns backwards
+            moveYaw = skidFace -- jumping out of a turning skid: face AND move the new way, so landing doesn't spin him back around
+            launch("SideFlip", CFG.SideFlipV, dirOf(skidFace) * CFG.SideFlipSpeed, skidFace)
         else
             local n = 1
             if os.clock() - lastLand < CFG.ChainWindow then
@@ -3270,7 +3271,7 @@ local function main(character, mode)
             play("dive_hold", 1, 0.05)
             return
         elseif from == "GroundPound" then
-            landAnim, landLock, landFreeze = "ground_pound_landing", 0.5, true
+            landAnim, landLock, landFreeze = "ground_pound_landing", 0.3, true -- short impact pose, then the SAME get-up as the belly slide (see the Land state)
             fVel = 0
             setState("Land")
             hitbox(root.Position, 9, CFG.Damage.pound, "pound")
@@ -3768,7 +3769,8 @@ local function main(character, mode)
                 end
             end
             if t > ledgeBlock and vy <= 0 and AIR[state] and not carried and state ~= "Dive" and state ~= "GPStart" and state ~= "GroundPound" and state ~= "AirBonk" and state ~= "AirKick" and not (state == "LongJump" and ljBack) then
-                if tryLedge() then vy = 0 end
+                local pushingIn = wantYaw ~= nil and math.abs(angDiff(wantYaw, faceYaw)) < math.rad(70)
+                if vy < -3 and pushingIn and tryLedge() then vy = 0 end -- no accidental ledge grabs while jumping past an edge
             end
             local hs2 = flat(hv)
             if not _M.KEEP_FACE[state] and state ~= "LongJump" and hs2.Magnitude > 2 and diveCancelT <= 0 then
@@ -3993,17 +3995,18 @@ local function main(character, mode)
             elseif state == "Skid" then
                 fVel = math.max(0, fVel - CFG.SkidFriction * dt)
                 if wantYaw then skidFace = wantYaw end
-                if fVel < 10 then
-                    faceYaw += math.clamp(angDiff(faceYaw, skidFace), -math.rad(720) * dt, math.rad(720) * dt)
+                if skidIsBrake then
+                    faceYaw = moveYaw -- braking: keep facing the way he's sliding
                 else
-                    faceYaw = moveYaw
+                    -- turning around: swing the face to the new direction steadily during the skid (no late snap)
+                    faceYaw += math.clamp(angDiff(faceYaw, skidFace), -math.rad(480) * dt, math.rad(480) * dt)
                 end
                 groundDrive(fVel, moveYaw)
                 if fresh("jump") then
                     doJump()
                 elseif wantYaw and fVel < 20 and math.abs(angDiff(moveYaw, wantYaw)) < math.rad(60) then
                     setState("Walk")
-                elseif fVel <= 3 and stateTime > 0.2 then
+                elseif fVel <= 3 and stateTime > 0.2 and (skidIsBrake or math.abs(angDiff(faceYaw, skidFace)) < math.rad(12) or stateTime > 0.7) then
                     faceYaw = skidFace
                     moveYaw = skidFace
                     if wantYaw then
@@ -4081,6 +4084,10 @@ local function main(character, mode)
                     doJump()
                 elseif fresh("jump") and (not landFreeze or stateTime > 0.15) then
                     doJump()
+                elseif landAnim == "ground_pound_landing" and stateTime >= landLock then
+                    -- ground pound over: get up with the same animation as getting up from the belly slide
+                    landAnim, landLock, landFreeze = "stand_up_from_slide", stateTime + 0.5, true
+                    play(landAnim, 1, 0.05)
                 elseif stateTime >= landLock or (not landFreeze and wantYaw and stateTime > 0.06) then
                     setState(fVel > 0.5 and "Walk" or "Idle")
                 end
@@ -4879,6 +4886,12 @@ local function main(character, mode)
                 if T.surf.water and T.water() then chain = { "water" }
                 elseif metal then chain = { "metal" }
                 else chain = T.MAT[matName] or T.DEFAULT end
+                if not metal then -- metal sounds ONLY play with the metal cap on
+                    local nm = {}
+                    for _, key in ipairs(chain) do if key ~= "metal" then nm[#nm + 1] = key end end
+                    if #nm == 0 then for _, key in ipairs(T.DEFAULT) do if key ~= "metal" then nm[#nm + 1] = key end end end
+                    chain = nm
+                end
                 for _, key in ipairs(chain) do
                     local list = T.surf[key]
                     if list and #list > 0 then
@@ -6728,6 +6741,7 @@ local function main(character, mode)
                 if grounded and not prevGround then
                     local fall = -minVy
                     minVy = 0
+                    _M.stepBlock = os.clock() + 0.35 -- no footstep on top of the landing sound
                     if lastAirState == "GroundPound" then
                         ring(feet + Vector3.new(0, 0.2, 0), 16, 20, 2.2)
                         puff(feet, 10, 10, 2)
@@ -6770,7 +6784,7 @@ local function main(character, mode)
                         if stepT <= 0 then
                             local crawl = state == "Crawl"
                             stepT = crawl and 0.5 or math.clamp(0.35 * (16 / hsp), 0.18, 0.4)
-                            playStep(stepSound(), 86, 100, crawl and 0.4 or 1)
+                            if os.clock() >= (_M.stepBlock or 0) then playStep(stepSound(), 86, 100, crawl and 0.4 or 1) end
                         end
                     else
                         stepT = 0.08
