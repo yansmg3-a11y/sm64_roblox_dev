@@ -646,7 +646,7 @@ local function main(character, mode)
         start_ground_pound="3D", start_ground_pound_flying="3B",
         ground_pound="3D", ground_pound_landing="3A",
         -- water and death
-        flying="A2", swim="AA", swim_idle="B2", swim_idle_alt="AD", dying="32",
+        flying="2A", swim="AA", swim_idle="B2", swim_idle_alt="AD", dying="32",
         -- emotes
         credits_waving="1D", credits_peace_sign="27", breakdance="71",
         -- baked and ready to use (not triggered by the moveset yet)
@@ -736,7 +736,8 @@ local function main(character, mode)
         ["99"]="crouch moving",
         ["9A"]="crouch moving stop",
         ["9B"]="crouch moving start",
-        ["A2"]="flying",
+        ["2A"]="wing cap flying",
+        ["A2"]="unused (old flying stand-in)",
         ["A6"]="drown in water",
         ["AA"]="moving in water",
         ["AC"]="holding, moving in water",
@@ -830,6 +831,7 @@ local function main(character, mode)
         ["99"]={n=115,step=5,keys=24,d="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"},
         ["9A"]={n=10,step=1,keys=10,d="4A/+AJv32mbjJeXO20j0vuAH/Amq2oUD4Af8XOuGHSPgB/wJlhXp+t/4APvV2GVVoAgABK3oNY2gCAOR2ZeYk6AIAASVhylHoAgDrODIeL8AAAha/MrgD/4Am/faZuMl5c7bSPS+4Af8CarahQPgB/xc64YdI+AH/AmWFen63/gA+9XYZVWgCAAEreg1jaAIA5HZl5iToAgABJWHKUegCAOs4Mh4vwAACFr8yuAP/gCcV+544xYqA9vI2L/gB/wJqdtZKOAH/HLrFj0o4Af8CZU1xdLf+ADl2AmNUKAIAAStmC2doAgDl9YXFEmgCAAElVdNYaAIA6Xl+QRHAAAJSvzK4A/+AJzYAp7i5oJR3Hi0wOAH/AmpXIVf4Af8k+pWbTHgB/wJlAWVmd/4AMbauoVRoAgABK0YIbSgCAOfrHhkNqAIAASVB4GHoAgDm5bHqFAAAAoZ/fbgD/4AnVgK0uKG3qHdSIjB4Af8CandMYTgB/yz6IahOuAH/AmSlclU3/gAqNvqTV2gCAAErJgZzqAIA6eq5wCHoAgABJTXubGgCAOTmdj4vwAACmkAOOAP/gCd6A8F4icy7t4YXMPgB/wJqpxNcOAH/MjkNs1E4Af8CY73CQff+ACR2/gVgqAIAASsGBHmoAgDsKcV2MagCAAElKf126AIA5Ge+dERAAAKjgI04A/+AJ6YDzThh4s93tg4xeAH/Am092kB4Af8udem2UjgB/wJGTDm4N/4AInoSI2ZoAgABKuH/fegCAO9pMachKAIAASUmDoMoAgDpZ65MKIAAArsAHHgD/4An0gLYODXy3zfeBjH4Af8Cb73PiPgB/yeyebROOAH/AkbcCWl3/gAh/SJbYagCAAEqwf+FaAIA7qjRxBToAgABJSYfj2gCAO/nwigQAAACoX+vOAP/gCfyAd94EfzpN/YBMjgB/wJF25SwOAH/IYke4wl4Af8CRsBbNbf+ACI+/n9V6AIAASqqAYzoAgDsqJ3TDGgCAAElKiyYaAIA9TgN7gEAAAJ+P1z4A/+AJ/4A4vgB/+14AgAyeAH/AkUnqcL4Af8eiQL2GzgB/wJhhorWN/4AIkotOPVoAgABKp4CkSgCAOsohdoIKAIAASUqMpxoAgD39+36CgAAAmj/Mo="},
         ["9B"]={n=10,step=1,keys=10,d="4A/+AJ/4A4vgB/+14AgAyeAH/AkUnqcL4Af8eiQL2GzgB/wJhhorWN/4AIkotOPVoAgABKp4CkSgCAOsohdoIKAIAASUqMpxoAgD39+36CgAAAmj/MrgD/4AoBf/g9/YB6PgF/jS4Af8CRXelvjgB/x4JDvAT+AH/AkY0RCq3/gAjv2qIUKgCAAEqpgKPKAIA6uiV3AZoAgABJSotmSgCAPd38fsLgAACcn8yuAP/gCgN/9x35gPfOBH9OTgB/wJF85WweAH/HbCZt0Z4Af8CRrR5Mjf+ACZ+tn9VaAIAASq6AoqoAgDqKLXgAmgCAAElJiOR6AIA9jf9/g8AAAKQ/zK4A/+AKBH+1jfaB9C4Gfs+eAH/AkY/gpW4Af8cceGySTgB/wJGeMFL9/4AKj2Ob1poAgABKtYChCgCAOl3IhgEKAIAASUmFIfoAgD0eAoDE8AAAtU/MrgD/4AoEf/Ot9YKvvgV/EK4Af8CRi+Kb7gB/xtzpa5LOAH/AkUk0Hr3/gAue/pYXegCAAEq+gN8qAIA6HbyDwroAgABJSYDe+gCAPJ4FgkZwAADMz8yuAP/gCgCAMY33gqrt/3/RPgB/wJGQ8ZKOAH/GjW9qEu4Af8CRAxgp/f+ADN6Hj9eaAIAASseBXToAgDnNsIEEmgCAAElMfJu6AIA8DgeDyAAAAOC/zK4A/+AJ74Aubf6App3qg0/+AH/Am3Zxzb4Af8Y98mfSzgB/wJi8sRN9/4AN/hGLFxoAgABK0IIbegCAOY2mfkZqAIAASVB4mNoAgDuOCYVJkAAAxb/MrgD/4AnZf6q+FXWiDdCITi4Af8CbA4nNngB/xf5bZRJ+AH/AmTmMWB3/gA7dsofWSgCAAErXgpoaAIA5TZ97x9oAgABJVHVWigCAOy4LhorQAACo78yuAP/gCch+Z94oaB6dvYzMrgB/wJrEno8uAH/F3p1i0k4Af8CZXmydTf+AD312hpWqAIAAStyDGToAgDktm3pI2gCAAElXc5UaAIA67guHS5AAAJIPzK4A/+AJv32mbjJeXO20j0vuAH/Amq2oUD4Af8XOuGHSPgB/wJlhXp+t/4APvV2GVVoAgABK3oNY2gCAOR2ZeYk6AIAASVhylHoAgDrODIeL8AAAha/Mo="},
+        ["2A"]={n=50,step=1.25,keys=41,d="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"},
         ["A2"]={n=29,step=7.5,keys=5,d="4A/+AJ/3/xff+AIo3/f9CQ51cuFanVIW4Af8vt8H3K4MubE6XBaVQN/4AMvs6eD1oAgABNC48CjgCAOw3/fcfKAIAATt1zwm4AgD4eCYOCYAABFZAADgD/4An/f/Gt/4Aivf9/0EDnVy4Vpccj3gB/zE3keIwwy5sTpcRpUx3/gA1OuJuPKgCAAErvcwMOAIA7bf59x8oAgABJJYoCPgCAPc4Kg4LgAAEVkAAOAP/gCgB/8f3/f+L+AH/PoOdXLhWouKZOAH/M/dFtDxDLmxOlx2lSPf+ADm6Ilo6aAIAASul4Bm4AgDw9/n3HygCAAEkphcVuAIA9DguDw/AAARWQAA4A/+AKAIAyTgB/404Af88Q51cuFbGpaK4Af82dxmJRsMubE6XJaVFN/4APblmSjeoAgABK6nyJrgCAPO3+fYfKAIAASSiCCG4AgDxeDIPE8AABFZAADgD/4AoAgDJuAH/jXgB/zuDnVy4Vup8qPgB/zc3EX5Jgy5sTpctpUK3/gA+uTZGNugCAAErrfcqeAIA9Hf59h7oAgABJJ4EJTgCAPC4Ng8UwAAEVkAAA=="},
         ["A6"]={n=87,step=5,keys=19,d="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"},
         ["AA"]={n=16,step=1.25,keys=13,d="4A/+AKAH/xXf9/413/gA+d3IfAG0WwZA4Af82u+m6VniN3ACi1POWN/4AQDSGIkmoAgABK6njHigCAN44AfYH6AIAASSeBSRoAgDb59XuAUAABFZAADgD/4AoAf/FN/3/jrf+ADy3ghwArQbxnDgB/0Y8pbtX+IHgAKLA0Z+3/gBOs3YVSigCAAErmekhaAIA2ngB9ggoAgABJKH8KigCANo4KhEBQAAEVkAAOAP/gCgB/8R3/f+Q9/3/Obf+AAJtJySpOAH/WL1twFm3/gACYoSvqXf+AF6yVgVKaAIAASuR+SOoAgDcuAH2A6gCAAEkmeou6AIA3fgqEABAAARWQAA4A/+AKAH/w3f+AJH3/f84OO3PBq0zKqq4Af9cvZnGWvcONgaifKqqt/4AYPId/0woAgABK6ISISgCAOhn+ggLqAIAASSV0yvoAgDoZ93vDEAABFZAADgD/4AoAf/CN/4Aknf9/zd58aAMbTcuq7gB/1/9tcxcNgZrDOJ4qKs3/gBiMfX7TigCAAErsjEeKAIA9Gf2CB/oAgABJJG2J2gCAPMn5e4dgAAEVkAAOAP/gCgB/8C3/gCTt/3/NbsBdRNtOy+sOAH/Yn3J0l108pwU4nSnq3f+AGKx1fZQKAIAASu+UBp3/gD/p/YIKKgCAAEkmZwiKAIA/afp7iUAAARWQAA4A/+AKAH/vrf+AJW4Af8y/BVOG+03L6v4Af9kfdnYXnPWyR5idKerd/4AYrHB8lJoAgABK7ZkFff+APNn+gcbKAIAASStihw4AgD3Z+XvGMAABFZAADgD/4AoAf+89/4AmDgB/y99KS0lLTcuq7gB/2Y95d5fsrruKSJ4qKs3/gBiMbHuVOgCAAEromYQ9/4A5agCBwOoAgABJNGJFff+AOvn2fEDgAAEVkAAOAP/gCf9/7r3/gCa+AH/K741Ei8tMyyrOAH/Z33t5WDxqww04nyqqvf+AGFxpepXKAIAASuCUAq3/gDW9/n3E6gCAAEk9Z8Ot/4A33gyDQ/AAARWQAA4A/+AJ/3/uPf+AJ24Af8ng/Tl5a0vKap4Af9ovfHrYcN2+x2igKuqd/4AYHGZ5lmoAgABNJnYCTf+AMc39fgpqAIAASUNxga3/gDSODYMIAAABFZAADgD/4An/f+29/4AoLgB/yPDwQ7YLSsnqbgB/2n9+fJjAz7KLCKEran3/gBfsY3iW+gCAAE0ngwQt/4Atvfx+EGoAgABOvYHCzf+AMQ4PgswgAAEVkAAOAP/gCf9/7U3/gCjOAH/IAOhNsjtKyWpeAH/az4B+GQDJpk8ooSuqXf+AF7xgd5eaAIAATSKQhr3/gCmN+34WygCAAE7GdMVt/4AtfhCCkGAAARWQAA4A/+AJ/3/s3gCAKW4Af8cw51cuG0nJKk4Af9tPgn/ZUMua06ihK+pd/4AXrFt2WCoAgABNGJwJrf+AJW35fh1KAIAATtVpyH3/gCn+EoJU4AABFZAAA="},
@@ -2701,7 +2703,7 @@ local function main(character, mode)
     local GROUND = {
         Idle = true, Walk = true, Crouch = true, Crawl = true, Skid = true, Land = true,
         Punch1 = true, Punch2 = true, Kick = true, SlideKick = true, DiveSlide = true,
-        Bonk = true, Emote = true,
+        Bonk = true, Emote = true, Breakdance = true,
     }
     local AIR = {
         Jump = true, DoubleJump = true, TripleJump = true, Backflip = true, LongJump = true,
@@ -3085,13 +3087,13 @@ local function main(character, mode)
     -- 160 SM64 units = CFG.ModelHeight studs. Attacks hit anything whose hurtbox touches Mario's
     -- radius + a short attack reach, inside a forward arc (like the real game's attack-angle check).
     _M.ATTACK = {
-        punch = { 40, 60 }, kick = { 40, 60 }, slide = { 40, 100 }, air = { 40, 100 }, dive = { 40, 100 }, pound = { 110, 360 },
+        punch = { 40, 60 }, kick = { 40, 60 }, slide = { 40, 100 }, air = { 40, 100 }, dive = { 40, 100 }, pound = { 110, 360 }, breakdance = { 55, 360 },
     }
     local HB = { h = 160 }
-    local function hitbox(_center, _radius, dmg, kind)
+    local function hitbox(_center, _radius, dmg, kind, ruleKind)
         local u = CFG.ModelHeight / 160
         if HB.flash then pcall(HB.flash, kind) end
-        local rule = _M.ATTACK[kind] or { 40, 90 }
+        local rule = _M.ATTACK[ruleKind or kind] or _M.ATTACK[kind] or { 40, 90 }
         local reach = 37 * u + rule[1] * u
         local mpos = root.Position
         local feetY = mpos.Y - rigFeet()
@@ -3391,6 +3393,16 @@ local function main(character, mode)
             end
         end
     end
+    -- BREAKDANCE ATTACK: crouch (hold) + punch = Mario spins on the floor and sweeps his legs all around him
+    local bdSeg = 1
+    local function startBreakdance()
+        eat("attack")
+        bdSeg = 1
+        if carried then throwCarried() return end
+        setState("Breakdance")
+        fVel = math.min(fVel, 6)
+        play("breakdance", 1.15, 0.05)
+    end
     local skidIsBrake = false
     local function locomote(dt, mag, wantYaw, maxSpeed, friction)
         local skid = false
@@ -3562,7 +3574,7 @@ local function main(character, mode)
         launch("Fall", 0, ledgeNormal * 3)
     end
     local FXS = { wing = not PK.netpeer and player:GetAttribute("M64Wing") == true, metal = not PK.netpeer and player:GetAttribute("M64Metal") == true, gliding = false, wasGliding = false, lastFlap = -10,
-        glide = { Jump = true, DoubleJump = true, TripleJump = true, Fall = true, SideFlip = true, Backflip = true, LongJump = true } }
+        glide = {} } -- no free gliding on ordinary jumps: like the game, the wing cap only flies after a TRIPLE jump (state "Fly")
     local NOPITCH = { LongJump = true, AirKick = true, GPStart = true, GroundPound = true, Backflip = true, TripleJump = true, SideFlip = true, AirBonk = true, WallKick = true }
     local function step(dt)
         if carried then
@@ -3904,6 +3916,8 @@ local function main(character, mode)
                     doJump()
                 elseif fresh("attack") and not held.crouch and state ~= "Emote" then
                     startAttack()
+                elseif fresh("attack") and held.crouch and (state == "Crouch" or state == "Crawl") then
+                    startBreakdance()
                 elseif state == "Emote" then
                     groundDrive(0, faceYaw)
                 else
@@ -4093,6 +4107,23 @@ local function main(character, mode)
                     else
                         comboQueued = false
                         setState("Idle")
+                    end
+                end
+            elseif state == "Breakdance" then
+                -- two full leg sweeps (each one can hit again), a little slide that fades out, then back to the crouch
+                fVel = math.max(0, fVel - 30 * dt)
+                groundDrive(fVel, faceYaw)
+                local seg = stateTime < 0.45 and 1 or 2
+                if seg ~= bdSeg then bdSeg = seg; hitSet = {} end -- second sweep: everything around him can be hit again
+                if stateTime > 0.05 and stateTime < 0.9 then
+                    hitbox(root.Position, CFG.PunchRadius, CFG.Damage.kick, "kick", "breakdance")
+                end
+                if stateTime >= 0.9 then
+                    if held.crouch then
+                        setState("Crouch")
+                    else
+                        setState("Idle")
+                        play("stop_crouching", 1.2, 0.05)
                     end
                 end
             elseif state == "SlideKick" then
@@ -4506,7 +4537,7 @@ local function main(character, mode)
             hbWeld.Part0 = root; hbWeld.Part1 = hbPart; hbWeld.Parent = hbPart
             hbPart.Parent = marioModel
             -- SM64: ACT_FLAG_SHORT_HITBOX actions use a 100-unit tall hurtbox instead of 160
-            local SHORT_HB = { Crouch = true, Crawl = true, SlideKick = true, DiveSlide = true, Dive = true,
+            local SHORT_HB = { Crouch = true, Crawl = true, Breakdance = true, SlideKick = true, DiveSlide = true, Dive = true,
                 LongJump = true, GPStart = true, GroundPound = true, Land = true, Bonk = true }
             local hbGui = Instance.new("BillboardGui")
             hbGui.Size = UDim2.fromOffset(190, 34); hbGui.StudsOffset = Vector3.new(0, 0, 0); hbGui.AlwaysOnTop = true
@@ -4973,7 +5004,7 @@ local function main(character, mode)
             local STATE_SFX = {
                 Jump = "jump", DoubleJump = "jump2", TripleJump = "jump3", LongJump = "longjump", Backflip = "backflip",
                 SideFlip = "jump2", WallKick = "wallkick", Punch1 = "punch", Punch2 = "punch", Kick = "kick",
-                AirKick = "kick", SlideKick = "kick", Dive = "dive", GPStart = "pound", Bonk = "bonk", AirBonk = "bonk",
+                AirKick = "kick", SlideKick = "kick", Breakdance = "kick", Dive = "dive", GPStart = "pound", Bonk = "bonk", AirBonk = "bonk",
                 Ledge = "land",
             }
             local KIT_SFX = { Punch1 = "kit1", Punch2 = "kit2", Kick = "kit3", LongJump = "kitlong", Backflip = "kitlong",
