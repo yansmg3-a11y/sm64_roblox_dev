@@ -1,97 +1,6 @@
-shared.M64Build = "20261124-4" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261124-5" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
--- R6 Move Fix (from a friend's patch): for games that lock or slow your movement. Menu toggle "R6 Move Fix". R6 characters only.
-shared.M64R6Conns = shared.M64R6Conns or {}
-shared.M64R6Stop = function()
-    for _, c in ipairs(shared.M64R6Conns) do pcall(function() c:Disconnect() end) end
-    table.clear(shared.M64R6Conns)
-end
-shared.M64R6Set = function(on)
-    shared.M64R6Stop()
-    shared.M64R6On = on and true or false
-    if not on then return end
-    local Players, RunService = game:GetService("Players"), game:GetService("RunService")
-    local lp = Players.LocalPlayer
-    local conns = shared.M64R6Conns
-    local function fixR6Full(char)
-        local hum = char:WaitForChild("Humanoid")
-        local root = char:WaitForChild("HumanoidRootPart")
-        if hum.RigType ~= Enum.HumanoidRigType.R6 then return end
-        local lastGround = 0
-        local lastPos = root.Position
-        local rayParams = RaycastParams.new()
-        rayParams.FilterType = Enum.RaycastFilterType.Exclude
-        rayParams.FilterDescendantsInstances = { char }
-        -- 1. PreSimulation: zero friction on the Mario hitbox and SM64-style ground speed without the R6 ground lock
-        conns[#conns + 1] = RunService.PreSimulation:Connect(function()
-            if not char.Parent then return end
-            lastPos = root.Position
-            if hum.Health <= 0 then return end
-            local marioModel = char:FindFirstChild("Mario64")
-            local hbPart = marioModel and marioModel:FindFirstChild("M64Hitbox")
-            if hbPart then hbPart.CustomPhysicalProperties = PhysicalProperties.new(0.01, 0, 0, 100, 100) end
-            local now = os.clock()
-            if hum.FloorMaterial ~= Enum.Material.Air then lastGround = now end
-            if now - lastGround > 0.12 then return end
-            local v = root.AssemblyLinearVelocity
-            local flatVel = Vector3.new(v.X, 0, v.Z)
-            local moveDir = hum.MoveDirection
-            local ws = hum.WalkSpeed
-            if moveDir.Magnitude > 0.05 and ws > 0.2 then
-                local dir = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
-                if math.abs(ws - 6) < 0.25 then
-                    local wallHit = workspace:Raycast(root.Position, dir * 2.2, rayParams)
-                    local realWall = wallHit and wallHit.Instance.CanCollide and math.abs(wallHit.Normal.Y) < 0.45
-                    if not realWall then
-                        ws = 38
-                        hum.WalkSpeed = 38
-                    end
-                end
-                root.AssemblyLinearVelocity = Vector3.new(dir.X * ws, v.Y, dir.Z * ws)
-            elseif flatVel.Magnitude > 0.5 and ws > 0.2 then
-                local dir = flatVel.Unit
-                root.AssemblyLinearVelocity = Vector3.new(dir.X * ws, v.Y, dir.Z * ws)
-            end
-        end)
-        -- 2. PostSimulation: make up distance if road seams / surfaces stole movement, still respecting walls
-        conns[#conns + 1] = RunService.PostSimulation:Connect(function(dt)
-            if not char.Parent or hum.Health <= 0 then return end
-            dt = math.min(dt, 0.05)
-            local now = os.clock()
-            if now - lastGround > 0.12 then return end
-            local v = root.AssemblyLinearVelocity
-            local flatVel = Vector3.new(v.X, 0, v.Z)
-            local moveDir = hum.MoveDirection
-            local ws = hum.WalkSpeed
-            if ws <= 0.2 then return end
-            local dir
-            if moveDir.Magnitude > 0.05 then
-                dir = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
-            elseif flatVel.Magnitude > 0.5 then
-                dir = flatVel.Unit
-            else
-                return
-            end
-            local curPos = root.Position
-            local actualMove = Vector3.new(curPos.X - lastPos.X, 0, curPos.Z - lastPos.Z)
-            local movedAlong = actualMove:Dot(dir)
-            local wantedMove = ws * dt
-            if movedAlong < wantedMove - 0.005 then
-                local extra = wantedMove - math.max(0, movedAlong)
-                local wallHit = workspace:Raycast(curPos, dir * (extra + 1.35), rayParams)
-                if not wallHit or not wallHit.Instance.CanCollide or math.abs(wallHit.Normal.Y) > 0.45 then
-                    root.CFrame = root.CFrame + (dir * extra)
-                end
-            end
-            root.AssemblyLinearVelocity = Vector3.new(dir.X * ws, v.Y, dir.Z * ws)
-        end)
-    end
-    if lp.Character then task.spawn(fixR6Full, lp.Character) end
-    conns[#conns + 1] = lp.CharacterAdded:Connect(function(c) task.spawn(fixR6Full, c) end)
-    pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", { Title = "SM64 R6 Fix", Text = "R6 Move Fix ON", Duration = 3 }) end)
-end
-if shared.M64R6On then shared.M64R6Set(true) end -- keeps it on after an update / re-run
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
 do
     pcall(function() if shared.StopR6M64Fix then shared.StopR6M64Fix() end end)
@@ -122,6 +31,10 @@ do
             if hum.Health <= 0 then return end
             local marioModel = char:FindFirstChild("Mario64")
             if not marioModel then return end -- only while the Mario script is actually running
+            local reg = shared.PursuitMarioReg and shared.PursuitMarioReg[char]
+            local okS, snap = pcall(function() return reg and reg.snapshot and reg.snapshot() end)
+            local stt = okS and snap and snap.state
+            if stt and not (stt == "Idle" or stt == "Walk" or stt == "Crouch" or stt == "Crawl" or stt == "Land") then return end -- slides, skids, dives... drive themselves
             local hbPart = marioModel:FindFirstChild("M64Hitbox")
             if hbPart then hbPart.CustomPhysicalProperties = PhysicalProperties.new(0.01, 0, 0, 100, 100) end
             local now = os.clock()
@@ -133,6 +46,8 @@ do
             local ws = hum.WalkSpeed
             if moveDir.Magnitude > 0.05 and ws > 0.2 then
                 local dir = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
+                local wallAhead = workspace:Raycast(root.Position, dir * 1.8, rayParams)
+                if wallAhead and wallAhead.Instance.CanCollide and math.abs(wallAhead.Normal.Y) < 0.45 then return end -- pushing into a wall: leave it to the game's physics
                 if math.abs(ws - 6) < 0.25 then
                     local wallHit = workspace:Raycast(root.Position, dir * 2.2, rayParams)
                     local realWall = wallHit and wallHit.Instance.CanCollide and math.abs(wallHit.Normal.Y) < 0.45
@@ -147,6 +62,12 @@ do
         -- PostSimulation: make up the distance if seams/surfaces robbed movement, still respecting walls
         charConns[#charConns + 1] = RunService.PostSimulation:Connect(function(dt)
             if not char.Parent or hum.Health <= 0 or not char:FindFirstChild("Mario64") then return end
+            do
+                local reg = shared.PursuitMarioReg and shared.PursuitMarioReg[char]
+                local okS, snap = pcall(function() return reg and reg.snapshot and reg.snapshot() end)
+                local stt = okS and snap and snap.state
+                if stt and not (stt == "Idle" or stt == "Walk" or stt == "Crouch" or stt == "Crawl" or stt == "Land") then return end
+            end
             dt = math.min(dt, 0.05)
             local now = os.clock()
             if now - lastGround > 0.12 then return end
@@ -160,6 +81,8 @@ do
             elseif flatVel.Magnitude > 0.5 then dir = flatVel.Unit
             else return end
             local curPos = root.Position
+            local wallNow = workspace:Raycast(curPos, dir * 1.8, rayParams)
+            if wallNow and wallNow.Instance.CanCollide and math.abs(wallNow.Normal.Y) < 0.45 then return end -- against a wall: no forcing
             local actualMove = Vector3.new(curPos.X - lastPos.X, 0, curPos.Z - lastPos.Z)
             local movedAlong = actualMove:Dot(dir)
             local wantedMove = ws * dt
@@ -200,7 +123,6 @@ shared.M64Update = function()
         -- shut the running Mario down, then start the new version
         pcall(function() for _, r in pairs(shared.PursuitMarioReg or {}) do pcall(r.kill) end end)
         pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end)
-        pcall(shared.M64R6Stop) -- the new copy turns it back on if it was on
         pcall(function()
             local pg = game:GetService("Players").LocalPlayer:FindFirstChildOfClass("PlayerGui")
             for _, g in ipairs(pg:GetChildren()) do
@@ -3985,8 +3907,8 @@ local function main(character, mode)
                 end
             end
             if t > ledgeBlock and vy <= 0 and AIR[state] and not carried and state ~= "Dive" and state ~= "GPStart" and state ~= "GroundPound" and state ~= "AirBonk" and state ~= "AirKick" and not (state == "LongJump" and ljBack) then
-                local pushingIn = wantYaw ~= nil and math.abs(angDiff(wantYaw, faceYaw)) < math.rad(70)
-                if vy < -3 and pushingIn and tryLedge() then vy = 0 end -- no accidental ledge grabs while jumping past an edge
+                local notAway = wantYaw == nil or math.abs(angDiff(wantYaw, faceYaw)) < math.rad(110) -- only skip the grab when you steer away from the wall
+                if vy < 0 and notAway and tryLedge() then vy = 0 end
             end
             local hs2 = flat(hv)
             if not _M.KEEP_FACE[state] and state ~= "LongJump" and hs2.Magnitude > 2 and diveCancelT <= 0 then
@@ -4214,8 +4136,7 @@ local function main(character, mode)
                 if skidIsBrake then
                     faceYaw = moveYaw -- braking: keep facing the way he's sliding
                 else
-                    -- turning around: swing the face to the new direction steadily during the skid (no late snap)
-                    faceYaw += math.clamp(angDiff(faceYaw, skidFace), -math.rad(480) * dt, math.rad(480) * dt)
+                    faceYaw = skidFace -- turning around is automatic: he faces the new way at once while still sliding the old way (the skid looks backwards)
                 end
                 groundDrive(fVel, moveYaw)
                 if fresh("jump") then
@@ -6038,7 +5959,6 @@ local function main(character, mode)
                 { "Stairs Assist", function() return opts.stairs ~= false end, function() opts.stairs = not (opts.stairs ~= false) end, nil, function() return (opts.stairs ~= false) and "Low steps are climbed by walking and stairs never make him slide" or "Stairs Assist off: steps and slopes work like before" end },
                 { "Wing Cap (X)", function() return FXS.wing end, function() setWing(not FXS.wing) end },
                 { "Metal Cap (M)", function() return FXS.metal end, function() setMetal(not FXS.metal) end },
-                { "R6 Move Fix", function() return shared.M64R6On == true end, function() shared.M64R6Set(not shared.M64R6On); if not shared.M64R6On then pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", { Title = "SM64 R6 Fix", Text = "R6 Move Fix OFF", Duration = 3 }) end) end end, nil, function() return "R6 Move Fix (if a game blocks movement):  " .. (shared.M64R6On and "ON" or "off") end },
                 { "UPDATE SCRIPT", function() return false end, function() shared.M64Update() end, nil, function() return "UPDATE SCRIPT" .. (shared.M64UpdStatus and ("  -  " .. shared.M64UpdStatus) or "") end, { on = Color3.fromRGB(60, 130, 240), off = Color3.fromRGB(45, 75, 140) } },
                 { "3-Point Filter (SM64)", function() return CFG.SM64Filter end, function() CFG.SM64Filter = not CFG.SM64Filter; if _M.retexture then _M.retexture() end end },
                 { "Mario Voice", function() return opts.voice end, function() opts.voice = not opts.voice end },
