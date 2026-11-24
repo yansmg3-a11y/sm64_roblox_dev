@@ -2051,6 +2051,7 @@ local function main(character, mode)
         return curName ~= nil and _M.TRANS[curName] == true and not isDone()
     end
     local tiltPitch, tiltRoll = 0, 0
+    local torsoFwd = 0 -- torso slides forward (not a lean) while Mario moves; 0..1
     local bodyPitch = 0
     local function applyPose(dt)
         if not curData then return end
@@ -2084,7 +2085,7 @@ local function main(character, mode)
         for j = 1, #ROT do
             local cf
             if j == 1 then cf = CFrame.new(pos) * CFrame.fromAxisAngle(CFG.BodyPitchAxis, bodyPitch * CFG.BodyPitchSign) * pose[j]
-            elseif ROT[j] == "Torso" then cf = CFrame.new(nodeT[j]) * tilt * pose[j]
+            elseif ROT[j] == "Torso" then cf = CFrame.new(nodeT[j] + Vector3.new(0, torsoFwd * 0.07 * posScale, 0)) * tilt * pose[j]
             elseif ROT[j] == "Head" and _M.headYaw then
                 cf = CFrame.new(nodeT[j]) * pose[j] * CFrame.fromAxisAngle(Vector3.new(1, 0, 0), _M.headYaw * CFG.HeadYawSign) * CFrame.fromAxisAngle(Vector3.new(0, 0, 1), _M.headPitch * CFG.HeadPitchSign)
             else cf = CFrame.new(nodeT[j]) * pose[j] end
@@ -4195,6 +4196,10 @@ local function main(character, mode)
             pitchT = -flyPitch -- nose up while climbing, nose down while diving
         end
         local a = 1 - math.exp(-10 * dt)
+        local shiftT = 0
+        if state == "Walk" then shiftT = math.clamp(fVel / CFG.RunMax, 0, 1)
+        elseif state == "Crawl" then shiftT = math.clamp(fVel / math.max(CFG.CrawlMax, 0.1), 0, 1) end
+        torsoFwd = lerp(torsoFwd, shiftT, a)
         tiltPitch = lerp(tiltPitch, pitchT, a)
         tiltRoll = lerp(tiltRoll, rollT, a)
         if character:GetAttribute("M64ShiftLock") then
