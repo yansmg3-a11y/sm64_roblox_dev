@@ -1,4 +1,4 @@
-shared.M64Build = "20261124-11" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261124-12" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -9042,7 +9042,7 @@ do
         r15 = {180435571, 180435792, 180426354, 125750702, 180436148, 180436334, 178130996, 182393478}
     }
     local CARRIER_COUNT, FRAME_DATA_BYTES, FRAME_INTERVAL = 8, 20, 0.08 -- FRAME_INTERVAL: seconds between data frames (smaller = less delay; if other players' animations start to glitch, raise it again, e.g. 0.11)
-    local HELLO, POSE, SOUND, HIT, WORLD_SET, WORLD_REMOVE, ACTION, FX, SETTINGS = 169, 170, 171, 172, 173, 174, 175, 176, 177
+    local HELLO, POSE, SOUND, HIT, WORLD_SET, WORLD_REMOVE, ACTION, FX, SETTINGS, CHAT = 169, 170, 171, 172, 173, 174, 175, 176, 177, 178
     local SOUND_NAMES = {"jump","jump2","jump3","longjump","backflip","wallkick","punch","kick","dive","pound","land","tripleland","hurt","death","bonk","flap","cap","kit1","kit2","kit3","kitlong","kwon","kna","kbe","kthe","kguy","kno"}
     local soundIndex = {}
     for i, s in ipairs(SOUND_NAMES) do soundIndex[s] = i end
@@ -9108,6 +9108,9 @@ do
     function Net.sendSound(name)
         local id = soundIndex[name]
         if id and Net.localCharacter == localPlayer.Character and Net.active then enqueue(SOUND, {id}, nil, true) end
+    end
+    function Net.sendChat(id) -- id = number of a preset phrase in Net.chat.PHRASES
+        if type(id) == "number" and Net.active and Net.localCharacter == localPlayer.Character then enqueue(CHAT, {id}, nil, true) end
     end
     local lastSmallFX, lastLargeFX = -100, -100
     function Net.sendFX(kind, pos, n, speed, size)
@@ -9457,6 +9460,13 @@ do
                     if #peer.pendingSounds>8 then table.remove(peer.pendingSounds, 1) end
                 end
             end
+        elseif msg == CHAT then
+            if #d ~= 1 then return end
+            local now = os.clock()
+            if now-(peer.lastChat or -10)<0.8 then return end -- anti-spam
+            peer.lastChat = now
+            local phrase = Net.chat and Net.chat.PHRASES[d[1]]
+            if phrase then Net.chat.show(peer.player, phrase, true) end
         elseif msg == HIT then
             if #d ~= 9 then return end
             local to = 0
@@ -9627,6 +9637,14 @@ do
         font = Enum.Font.Antique, textSize = 18, maxWidth = 260,
         minTime = 3, maxTime = 8, maxChars = 120,  -- seconds a bubble stays (longer messages stay longer), and the longest message shown
         hideRobloxBubbles = false,                 -- true = turn off Roblox's own bubbles on YOUR screen so you never see two bubbles
+        button = true,                             -- the 💬 button (left edge of the screen); false = hide it
+        key = Enum.KeyCode.T,                      -- opens / closes the phrase menu (nil = no key)
+        -- the phrases in the menu. Everybody's script must have the SAME list in the SAME order: only the number is sent.
+        -- Add new phrases at the END so older copies of the script keep working.
+        PHRASES = {
+            "Wahoo!", "Let's-a go!", "Mamma mia!", "Hello!", "Thank you!", "Nice one!", "Good game!", "Follow me!", "Help!", "Yes!",
+            "No!", "Okey-dokey!", "Here we go!", "Watch out!", "Oh no...", "Haha!", "I'm ready!", "Wait for me!", "Let's fight!", "Yahoo!",
+        },
         bubbles = {},
     }
     do
@@ -9645,16 +9663,17 @@ do
         function chat.clear()
             for _, g in pairs(chat.bubbles) do pcall(function() g:Destroy() end) end
             chat.bubbles = {}
+            if chat.ui then pcall(function() chat.ui:Destroy() end); chat.ui = nil end
             if bubbleCfgWasEnabled ~= nil then
                 pcall(function() TextChatService.BubbleChatConfiguration.Enabled = bubbleCfgWasEnabled end)
                 bubbleCfgWasEnabled = nil
             end
         end
 
-        function chat.show(player, text)
+        function chat.show(player, text, force)
             if not chat.enabled or not Net.active or typeof(text) ~= "string" then return end
             -- only players that run this script (you are one too) get the custom bubble
-            if player ~= localPlayer and not Net.peers[player] then return end
+            if not force and player ~= localPlayer and not Net.peers[player] then return end
             text = unescape(text):gsub("^%s+", ""):gsub("%s+$", "")
             if text == "" or text:sub(1, 1) == "/" then return end
             local now = os.clock()
@@ -9760,6 +9779,71 @@ do
                 end
             end)
         end)
+
+        -- ---- the 💬 button + phrase menu: works for anybody who has the script, no Roblox chat needed ----
+        -- Players pick a ready-made phrase (no typing), only its NUMBER travels through the script's own network, and everyone's
+        -- script shows the matching bubble. Because nothing but a fixed phrase is sent, there is no free text to filter.
+        function chat.say(id)
+            local phrase = chat.PHRASES[id]
+            if not phrase or not Net.active then return end
+            local now = os.clock()
+            if now - (chat.lastSay or -10) < 1.2 then return end -- anti-spam
+            chat.lastSay = now
+            chat.show(localPlayer, phrase, true)
+            Net.sendChat(id)
+        end
+
+        task.spawn(function()
+            if not chat.button then return end
+            pcall(function()
+                local UserInputService = game:GetService("UserInputService")
+                local pg = localPlayer:WaitForChild("PlayerGui", 10)
+                if not pg or not Net.active then return end
+                local gui = Instance.new("ScreenGui")
+                gui.Name = "M64ChatUI"; gui.ResetOnSpawn = false; gui.DisplayOrder = 50
+                chat.ui = gui
+
+                local btn = Instance.new("TextButton")
+                btn.Size = UDim2.fromOffset(46, 46); btn.AnchorPoint = Vector2.new(0, 0.5); btn.Position = UDim2.new(0, 12, 0.5, 0)
+                btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255); btn.BackgroundTransparency = 0.1
+                btn.Text = "💬"; btn.TextSize = 24; btn.Font = Enum.Font.GothamBold; btn.TextColor3 = Color3.fromRGB(20, 20, 20)
+                btn.AutoButtonColor = true
+                local bc = Instance.new("UICorner"); bc.CornerRadius = UDim.new(1, 0); bc.Parent = btn
+                local bs = Instance.new("UIStroke"); bs.Thickness = 2; bs.Color = Color3.new(0, 0, 0); bs.Parent = btn
+                btn.Parent = gui
+
+                local panel = Instance.new("Frame")
+                panel.Visible = false; panel.Size = UDim2.fromOffset(230, 320)
+                panel.AnchorPoint = Vector2.new(0, 0.5); panel.Position = UDim2.new(0, 66, 0.5, 0)
+                panel.BackgroundColor3 = Color3.fromRGB(24, 24, 28); panel.BackgroundTransparency = 0.08; panel.BorderSizePixel = 0
+                local pc = Instance.new("UICorner"); pc.CornerRadius = UDim.new(0, 12); pc.Parent = panel
+                local title = Instance.new("TextLabel")
+                title.BackgroundTransparency = 1; title.Size = UDim2.new(1, 0, 0, 30); title.Font = Enum.Font.GothamBold; title.TextSize = 15
+                title.TextColor3 = Color3.new(1, 1, 1); title.Text = "Say something"; title.Parent = panel
+                local list = Instance.new("ScrollingFrame")
+                list.BackgroundTransparency = 1; list.BorderSizePixel = 0; list.Position = UDim2.fromOffset(8, 32); list.Size = UDim2.new(1, -16, 1, -40)
+                list.ScrollBarThickness = 4; list.CanvasSize = UDim2.new(); list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+                local ll = Instance.new("UIListLayout"); ll.Padding = UDim.new(0, 5); ll.Parent = list
+                for i, phrase in ipairs(chat.PHRASES) do
+                    local b = Instance.new("TextButton")
+                    b.Size = UDim2.new(1, -4, 0, 34); b.LayoutOrder = i; b.BackgroundColor3 = Color3.fromRGB(58, 58, 66)
+                    b.Font = Enum.Font.GothamMedium; b.TextSize = 15; b.TextColor3 = Color3.new(1, 1, 1); b.Text = phrase
+                    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = b
+                    b.MouseButton1Click:Connect(function() chat.say(i); panel.Visible = false end)
+                    b.Parent = list
+                end
+                list.Parent = panel
+                panel.Parent = gui
+                gui.Parent = pg
+
+                btn.MouseButton1Click:Connect(function() panel.Visible = not panel.Visible end)
+                Net.connections[#Net.connections + 1] = UserInputService.InputBegan:Connect(function(input, processed)
+                    if processed or not chat.key then return end
+                    if input.KeyCode == chat.key then panel.Visible = not panel.Visible end
+                end)
+            end)
+        end)
+
     end
 
     function Net.stop()
