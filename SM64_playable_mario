@@ -1,4 +1,4 @@
-shared.M64Build = "20261124-5" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261124-10" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -2223,7 +2223,7 @@ local function main(character, mode)
         for j = 1, #ROT do
             local cf
             if j == 1 then cf = CFrame.new(pos) * CFrame.fromAxisAngle(CFG.BodyPitchAxis, bodyPitch * CFG.BodyPitchSign) * pose[j]
-            elseif ROT[j] == "Torso" then cf = CFrame.new(nodeT[j] + Vector3.new(0, torsoFwd * 0.13 * posScale, 0)) * tilt * pose[j]
+            elseif ROT[j] == "Torso" then cf = CFrame.new(nodeT[j] + Vector3.new(0, torsoFwd * 0.15 * posScale, 0)) * tilt * pose[j]
             elseif ROT[j] == "Head" and _M.headYaw then
                 cf = CFrame.new(nodeT[j]) * pose[j] * CFrame.fromAxisAngle(Vector3.new(1, 0, 0), _M.headYaw * CFG.HeadYawSign) * CFrame.fromAxisAngle(Vector3.new(0, 0, 1), _M.headPitch * CFG.HeadPitchSign)
             else cf = CFrame.new(nodeT[j]) * pose[j] end
@@ -2740,7 +2740,9 @@ local function main(character, mode)
         end
     end
     _M.applyTouchStyle()
-    local sm64Gravity = false
+    -- Fall speed is decided by the DEV button "No max fall speed" (this replaces the old SM64 FALL switch):
+    --   ON (default) = normal Roblox gravity, nothing stops the fall.   OFF = SM64 fall, capped at the game's maximum of 75.
+    local function sm64Gravity() return shared.M64NoFallCap == false end
     if not PK.puppet then
         local pg = player:WaitForChild("PlayerGui")
         local old = pg:FindFirstChild("MarioToggles")
@@ -2751,22 +2753,6 @@ local function main(character, mode)
         tg.IgnoreGuiInset = true
         tg.DisplayOrder = 50
         tg.Parent = pg
-        local tb = Instance.new("TextButton")
-        tb.Size = UDim2.fromOffset(160, 44)
-        tb.Position = UDim2.new(0, 12, 0.5, -20)
-        tb.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        tb.BackgroundTransparency = 0.25
-        tb.TextColor3 = Color3.new(1, 1, 1)
-        tb.Font = Enum.Font.GothamBold
-        tb.TextSize = 13
-        tb.Text = "SM64 FALL: OFF"
-        tb.Parent = tg
-        Instance.new("UICorner", tb).CornerRadius = UDim.new(0, 8)
-        tb.Activated:Connect(function()
-                sm64Gravity = not sm64Gravity
-                tb.Text = sm64Gravity and "SM64 FALL: ON" or "SM64 FALL: OFF"
-                tb.BackgroundColor3 = sm64Gravity and Color3.fromRGB(40, 150, 60) or Color3.fromRGB(60, 60, 60)
-        end)
         local sizeTb = Instance.new("TextButton")
         sizeTb.Size = UDim2.fromOffset(160, 44)
         sizeTb.Position = UDim2.new(0, 12, 0.5, 34)
@@ -2810,8 +2796,8 @@ local function main(character, mode)
             applySizeChoice()
         end)
         CFG.Tog = {
-            fall = function() return sm64Gravity end,
-            fallTap = function() sm64Gravity = not sm64Gravity end,
+            fall = function() return sm64Gravity() end,
+            fallTap = function() shared.M64NoFallCap = (shared.M64NoFallCap == false) end,
             size = function() return accurateSize end,
             sizeTap = function() accurateSize = not accurateSize; applySizeChoice() end,
             shift = function() return character:GetAttribute("M64ShiftLock") == true end,
@@ -3111,7 +3097,7 @@ local function main(character, mode)
                 humanoid:Move(Vector3.zero, false)
                 humanoid.WalkSpeed = 0.01
                 local vy = v.Y
-                if sm64Gravity then
+                if sm64Gravity() then
                     local U = CFG.ModelHeight / 160
                     vy = math.max(vy + (workspace.Gravity - 4 * 900 * U) * dt, -75 * 30 * U)
                 else
@@ -3827,12 +3813,12 @@ local function main(character, mode)
             if state == "GPStart" then
                 hv = Vector3.zero
                 vy = 0
-                if stateTime >= (sm64Gravity and 0.37 or CFG.GPHover) then
+                if stateTime >= (sm64Gravity() and 0.37 or CFG.GPHover) then
                     setState("GroundPound")
                 end
             elseif state == "GroundPound" then
                 hv = Vector3.zero
-                vy = sm64Gravity and -(50 * 30 * CFG.ModelHeight / 160) or -CFG.GPSpeed
+                vy = sm64Gravity() and -(50 * 30 * CFG.ModelHeight / 160) or -CFG.GPSpeed
             else
                 if not _M.NO_STEER[state] and diveCancelT <= 0 then
                     if wantYaw then
@@ -3869,7 +3855,7 @@ local function main(character, mode)
                         bljStuck = true -- head under a low ceiling: short hops, speed keeps stacking
                     end
                 end
-                if sm64Gravity then
+                if sm64Gravity() then
                     local U = CFG.ModelHeight / 160
                     local g = ((state == "LongJump") and 2 or 4) * 900 * U
                     vy = math.max(vy + (workspace.Gravity - g) * dt, -75 * 30 * U)
@@ -5517,7 +5503,57 @@ local function main(character, mode)
             local METAL_COLOR = Color3.fromRGB(190, 196, 210)
             local metalTex = nil
             local origLook = {}
+            -- REAL reflections: a PBR "mirror" surface (full metalness, almost no roughness) makes Roblox reflect the game's actual skybox / environment in Metal Mario
+            local function mirrorContent()
+                if _M.mirrorC == nil then
+                    _M.mirrorC = false
+                    pcall(function()
+                            local function solid(v1, v2, v3)
+                                local ei = _M.AssetService:CreateEditableImage({ Size = Vector2.new(4, 4) })
+                                local buf = buffer.create(64)
+                                for i = 0, 15 do
+                                    buffer.writeu8(buf, i * 4, v1); buffer.writeu8(buf, i * 4 + 1, v2); buffer.writeu8(buf, i * 4 + 2, v3); buffer.writeu8(buf, i * 4 + 3, 255)
+                                end
+                                ei:WritePixelsBuffer(Vector2.zero, Vector2.new(4, 4), buf)
+                                _M.uiKeep[#_M.uiKeep + 1] = ei
+                                return Content.fromObject(ei)
+                            end
+                            _M.mirrorC = { color = solid(205, 210, 222), metal = solid(255, 255, 255), rough = solid(20, 20, 20) }
+                    end)
+                end
+                return _M.mirrorC
+            end
+            local function applyMirror(d, on)
+                local old = d:FindFirstChild("M64MirrorSA")
+                if not on then
+                    if old then old:Destroy() end
+                    return false
+                end
+                if old then return true end
+                if not d:IsA("MeshPart") or shared.M64MetalMirror == false then return false end
+                local mc = mirrorContent()
+                if not mc then return false end
+                local ok = pcall(function()
+                        local sa = Instance.new("SurfaceAppearance")
+                        sa.Name = "M64MirrorSA"
+                        sa.ColorMapContent = mc.color
+                        sa.MetalnessMapContent = mc.metal
+                        sa.RoughnessMapContent = mc.rough
+                        sa.Parent = d
+                end)
+                return ok
+            end
             local function applyMetal(on)
+                pcall(function() -- the skybox reflection strength comes from Lighting: make sure it is on while Metal Mario is
+                        local L = game:GetService("Lighting")
+                        if on then
+                            if _M.origSpec == nil then _M.origSpec = L.EnvironmentSpecularScale end
+                            L.EnvironmentSpecularScale = 1
+                        elseif _M.origSpec ~= nil then
+                            L.EnvironmentSpecularScale = _M.origSpec
+                            _M.origSpec = nil
+                        end
+                end)
                 if on and metalTex == nil then
                     metalTex = false
                     if CFG.TextureId == "" and _M.textureContent then
@@ -5564,7 +5600,9 @@ local function main(character, mode)
                             end
                             d.Material = Enum.Material.Metal
                             d.Reflectance = (ref and metalImg) and 0.25 or 0.4
+                            if applyMirror(d, true) then d.Reflectance = 0 end -- real skybox reflection instead of the picture
                         else
+                            applyMirror(d, false)
                             if _M.SAStore and _M.SAStore[d] then _M.SAStore[d].Parent = d end
                             local o = origLook[d]
                             local ref2 = d:IsA("MeshPart") and CFG.MeshRef[d] or nil
@@ -5968,7 +6006,6 @@ local function main(character, mode)
                 { "  Playable SM64 moves", function() return PC.Playable end, function() PC.Playable = not PC.Playable; if PC.Refresh then PC.Refresh() end end, function() return PC.Enabled end },
                 { "Glitch", function() return opts.glitch == true end, function() if CFG.GL.request then CFG.GL.request() end end, nil, function() return opts.glitch == true and "GLITCH:  ON  (tap = stop)" or "Glitch:  off" end },
                 { "  Glitch level", function() return opts.glitch == true end, function() if CFG.GL.cycle then CFG.GL.cycle() end end, function() return opts.glitch == true end, function() return "  Glitch level: " .. tostring(opts.glitchLevel or 3) .. " / 5  (tap)" end },
-                { "SM64 fall", function() return CFG.Tog ~= nil and CFG.Tog.fall() end, function() if CFG.Tog then CFG.Tog.fallTap() end end, nil, function() return (CFG.Tog ~= nil and CFG.Tog.fall()) and "SM64 fall:  ON" or "SM64 fall:  off" end },
                 { "Size", function() return CFG.Tog ~= nil and CFG.Tog.size() end, function() if CFG.Tog then CFG.Tog.sizeTap() end end, nil, function() return (CFG.Tog ~= nil and CFG.Tog.size()) and "Size:  accurate" or "Size:  normal" end },
                 { "Shift lock", function() return CFG.Tog ~= nil and CFG.Tog.shift() end, function() if CFG.Tog then CFG.Tog.shiftTap() end end, nil, function() return (CFG.Tog ~= nil and CFG.Tog.shift()) and "Shift lock:  ON" or "Shift lock:  off" end },
             }
@@ -7893,6 +7930,13 @@ local function main(character, mode)
                     CL.labels.combat = btn("Clone combat: ON", 6, function() CL.toggleCombat() end)
                     CL.labels.dist = btn("Clone place: 12 studs", 7, function() CL.cycleDist() end)
                     btn("Clone: kill", 8, function() CL.kill() end)
+                    -- SM64 stops Mario's fall at speed 75; with this ON (default) he keeps accelerating (the game reaches 308 at impact)
+                    local capBtn
+                    local function capLabel() return "No max fall speed: " .. (shared.M64NoFallCap == false and "OFF (SM64 75)" or "ON") end
+                    capBtn = btn(capLabel(), 9, function()
+                            shared.M64NoFallCap = (shared.M64NoFallCap == false)
+                            capBtn.Text = capLabel()
+                    end)
                     CL.refreshLabels()
                     local devToggle = Instance.new("TextButton")
                     devToggle.Size = UDim2.fromOffset(104, 28); devToggle.Position = UDim2.new(0, 8, 0, 34)
