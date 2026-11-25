@@ -1,4 +1,4 @@
-shared.M64Build = "20261124-10" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261124-11" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -9619,12 +9619,156 @@ do
             Net.settingsSnapshot = nil
     end)
 
+    -- ---------- Chat bubbles ----------
+    -- Shows what anyone running this script (and you) says in the normal Roblox chat as a Mario-style speech bubble over their head.
+    -- It only shows messages Roblox has already filtered and delivered to you. Nothing is sent anywhere by this script.
+    Net.chat = {
+        enabled = true,
+        font = Enum.Font.Antique, textSize = 18, maxWidth = 260,
+        minTime = 3, maxTime = 8, maxChars = 120,  -- seconds a bubble stays (longer messages stay longer), and the longest message shown
+        hideRobloxBubbles = false,                 -- true = turn off Roblox's own bubbles on YOUR screen so you never see two bubbles
+        bubbles = {},
+    }
+    do
+        local TextService = game:GetService("TextService")
+        local TextChatService = game:GetService("TextChatService")
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local chat = Net.chat
+        local last = {}
+        local bubbleCfgWasEnabled = nil
+
+        local function unescape(s)
+            s = s:gsub("&lt;", "<"):gsub("&gt;", ">"):gsub("&quot;", '"'):gsub("&apos;", "'"):gsub("&amp;", "&")
+            return s
+        end
+
+        function chat.clear()
+            for _, g in pairs(chat.bubbles) do pcall(function() g:Destroy() end) end
+            chat.bubbles = {}
+            if bubbleCfgWasEnabled ~= nil then
+                pcall(function() TextChatService.BubbleChatConfiguration.Enabled = bubbleCfgWasEnabled end)
+                bubbleCfgWasEnabled = nil
+            end
+        end
+
+        function chat.show(player, text)
+            if not chat.enabled or not Net.active or typeof(text) ~= "string" then return end
+            -- only players that run this script (you are one too) get the custom bubble
+            if player ~= localPlayer and not Net.peers[player] then return end
+            text = unescape(text):gsub("^%s+", ""):gsub("%s+$", "")
+            if text == "" or text:sub(1, 1) == "/" then return end
+            local now = os.clock()
+            local l = last[player]
+            if l and l.text == text and now - l.t < 0.5 then return end -- the same message can arrive twice
+            last[player] = {text = text, t = now}
+            local n = utf8.len(text)
+            if n and n > chat.maxChars then text = text:sub(1, utf8.offset(text, chat.maxChars) - 1) .. "..." end
+
+            local char = player.Character
+            local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head"))
+            if not root then return end
+            local okExt, ext = pcall(function() return char:GetExtentsSize() end)
+            local off = math.clamp((okExt and ext.Y or 5) * 0.5 + 0.8, 2, 14) -- just above the head, also for a big / small Mario
+            local old = chat.bubbles[player]
+            if old then pcall(function() old:Destroy() end) end
+
+            local sz = TextService:GetTextSize(text, chat.textSize, chat.font, Vector2.new(chat.maxWidth, 10000))
+            local bw, bh = math.max(sz.X + 28, 44), sz.Y + 18
+            local H = bh + 8 + 12 -- bubble + outline + tail
+            local white, black = Color3.new(1, 1, 1), Color3.new(0, 0, 0)
+
+            -- the gui is twice as tall as the bubble and the bubble sits in its top half, so the TAIL TIP is exactly at the anchor point
+            local g = Instance.new("BillboardGui")
+            g.Name = "M64ChatBubble"; g.Adornee = root; g.Size = UDim2.fromOffset(bw + 8, H * 2)
+            g.StudsOffset = Vector3.new(0, off, 0); g.AlwaysOnTop = true; g.MaxDistance = 160
+            g.LightInfluence = 0; g.ResetOnSpawn = false
+
+            local function outline(f)
+                local s = Instance.new("UIStroke"); s.Thickness = 3; s.Color = black; s.Parent = f
+            end
+            local tail = Instance.new("Frame")
+            tail.AnchorPoint = Vector2.new(0.5, 0.5); tail.Size = UDim2.fromOffset(14, 14); tail.Rotation = 45
+            tail.Position = UDim2.fromOffset(4 + bw / 2, 4 + bh + 2)
+            tail.BackgroundColor3 = white; tail.BorderSizePixel = 0; tail.ZIndex = 1
+            outline(tail); tail.Parent = g
+
+            local body = Instance.new("Frame")
+            body.Position = UDim2.fromOffset(4, 4); body.Size = UDim2.fromOffset(bw, bh)
+            body.BackgroundColor3 = white; body.BorderSizePixel = 0; body.ZIndex = 2
+            local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, 12); corner.Parent = body
+            outline(body); body.Parent = g
+
+            local patch = Instance.new("Frame") -- hides the outline where the tail joins the bubble
+            patch.AnchorPoint = Vector2.new(0.5, 0.5); patch.Size = UDim2.fromOffset(12, 8)
+            patch.Position = UDim2.fromOffset(4 + bw / 2, 4 + bh)
+            patch.BackgroundColor3 = white; patch.BorderSizePixel = 0; patch.ZIndex = 4; patch.Parent = g
+
+            local t = Instance.new("TextLabel")
+            t.BackgroundTransparency = 1; t.Position = UDim2.fromOffset(14, 9); t.Size = UDim2.fromOffset(bw - 28, bh - 18)
+            t.Font = chat.font; t.TextSize = chat.textSize; t.TextColor3 = Color3.fromRGB(20, 20, 20)
+            t.TextWrapped = true; t.RichText = false; t.Text = text; t.ZIndex = 3; t.Parent = body
+
+            g.Parent = root
+            chat.bubbles[player] = g
+            task.delay(math.clamp(2 + #text * 0.06, chat.minTime, chat.maxTime), function()
+                if chat.bubbles[player] == g then chat.bubbles[player] = nil end
+                if g.Parent then g:Destroy() end
+            end)
+        end
+
+        local function fromUserId(uid, text)
+            local p = Players:GetPlayerByUserId(uid)
+            if p then chat.show(p, text) end
+        end
+
+        -- hook the Roblox chat that is on in this game (new TextChat, or the old chat). Runs in its own thread so it never delays the script.
+        task.spawn(function()
+            pcall(function()
+                if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+                    local function onMessage(msg)
+                        local src, channel = msg.TextSource, msg.TextChannel
+                        if not src or (channel and channel.Name ~= "RBXGeneral") then return end -- skip system / team / whisper messages
+                        fromUserId(src.UserId, msg.Text)
+                    end
+                    local okTop = pcall(function()
+                        Net.connections[#Net.connections + 1] = TextChatService.MessageReceived:Connect(onMessage)
+                    end)
+                    if not okTop then -- older TextChat builds: listen on every channel instead
+                        local channels = TextChatService:WaitForChild("TextChannels", 5)
+                        if channels then
+                            for _, ch in ipairs(channels:GetChildren()) do
+                                if ch:IsA("TextChannel") then Net.connections[#Net.connections + 1] = ch.MessageReceived:Connect(onMessage) end
+                            end
+                            Net.connections[#Net.connections + 1] = channels.ChildAdded:Connect(function(ch)
+                                if ch:IsA("TextChannel") then Net.connections[#Net.connections + 1] = ch.MessageReceived:Connect(onMessage) end
+                            end)
+                        end
+                    end
+                    if chat.hideRobloxBubbles then
+                        local cfg = TextChatService:FindFirstChildOfClass("BubbleChatConfiguration")
+                        if cfg then bubbleCfgWasEnabled = cfg.Enabled; cfg.Enabled = false end
+                    end
+                else
+                    local events = ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents", 5)
+                    local done = events and events:WaitForChild("OnMessageDoneFiltering", 5)
+                    if done then
+                        Net.connections[#Net.connections + 1] = done.OnClientEvent:Connect(function(data)
+                            if type(data) ~= "table" or (data.OriginalChannel and data.OriginalChannel ~= "All") then return end
+                            if data.SpeakerUserId then fromUserId(data.SpeakerUserId, data.Message) end
+                        end)
+                    end
+                end
+            end)
+        end)
+    end
+
     function Net.stop()
         if not Net.active then return end
         Net.active = false
         disconnectTracks()
         for _, c in ipairs(Net.connections) do pcall(function() c:Disconnect() end) end
         pcall(Net.battle.shutdown)
+        pcall(Net.chat.clear)
         for p in pairs(Net.peers) do removePeer(p) end
         if shared.M64Multiplayer == Net then shared.M64Multiplayer = nil end
     end
