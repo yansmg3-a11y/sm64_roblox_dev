@@ -1,4 +1,4 @@
-shared.M64Build = "20261125-2" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261125-4" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -2868,14 +2868,25 @@ local function main(character, mode)
             end
             shared.M64FreeCamToggle = function() setOn(not FC.on) end
             local function con(sig, fn) FC.conns[#FC.conns + 1] = sig:Connect(fn) end
+            local GuiService = game:GetService("GuiService")
+            local function inPad(pos) -- the invisible left-side area that belongs to the walking stick
+                local c = workspace.CurrentCamera
+                if not c then return false end
+                local vs = c.ViewportSize
+                return pos.X < vs.X * 0.36 and pos.Y > vs.Y * 0.38
+            end
             con(UIS.InputBegan, function(input, gpe)
                 if input.KeyCode == Enum.KeyCode.V and not gpe and not _M.menuBlock and not UIS:GetFocusedTextBox() then setOn(not FC.on) return end
-                if not FC.on or gpe then return end
+                if not FC.on then return end
+                if input.UserInputType == Enum.UserInputType.Touch then
+                    -- any finger that is NOT on the walking stick turns the camera (also while you walk), even if a button sits under it
+                    if not inPad(input.Position) and not _M.menuBlock and not GuiService.MenuIsOpen then FC.touches[input] = true end
+                    return
+                end
+                if gpe then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton2 then
                     FC.rmb = true
                     pcall(function() UIS.MouseBehavior = Enum.MouseBehavior.LockCurrentPosition end)
-                elseif input.UserInputType == Enum.UserInputType.Touch then
-                    FC.touches[input] = true
                 end
             end)
             con(UIS.InputEnded, function(input)
@@ -2896,12 +2907,15 @@ local function main(character, mode)
                     FC.dist = math.clamp(FC.dist * (1 - input.Position.Z * 0.12), 1, 400)
                 end
             end)
-            con(UIS.TouchPinch, function(_, scale, _, state, gpe)
+            con(UIS.TouchPinch, function(positions, scale, _, state, gpe)
                 if not FC.on then return end
+                -- a pinch only counts when BOTH fingers are away from the walking stick (stick finger + camera finger is NOT a pinch)
+                local clear = true
+                for _, p in ipairs(positions) do if inPad(p) then clear = false end end
                 if state == Enum.UserInputState.Begin then
-                    FC.pinching, FC.pinch0 = true, FC.dist
+                    if clear then FC.pinching, FC.pinch0 = true, FC.dist end
                 elseif state == Enum.UserInputState.Change then
-                    if FC.pinch0 and not gpe then FC.dist = math.clamp(FC.pinch0 / math.max(scale, 0.05), 1, 400) end
+                    if FC.pinching and FC.pinch0 and clear then FC.dist = math.clamp(FC.pinch0 / math.max(scale, 0.05), 1, 400) end
                 else
                     FC.pinching, FC.pinch0 = false, nil
                 end
@@ -6120,6 +6134,7 @@ local function main(character, mode)
                 { "Size", function() return CFG.Tog ~= nil and CFG.Tog.size() end, function() if CFG.Tog then CFG.Tog.sizeTap() end end, nil, function() return (CFG.Tog ~= nil and CFG.Tog.size()) and "Size:  accurate" or "Size:  normal" end },
                 { "Shift lock", function() return CFG.Tog ~= nil and CFG.Tog.shift() end, function() if CFG.Tog then CFG.Tog.shiftTap() end end, nil, function() return (CFG.Tog ~= nil and CFG.Tog.shift()) and "Shift lock:  ON" or "Shift lock:  off" end },
                 { "Free camera", function() return shared.M64FreeCam == true end, function() if shared.M64FreeCamToggle then shared.M64FreeCamToggle() end end, nil, function() return shared.M64FreeCam == true and "Free camera:  ON  (V)" or "Free camera:  off  (V)" end },
+                { "Mini screens", function() return shared.M64PiPOff ~= true end, function() if shared.M64PiPToggle then shared.M64PiPToggle() end end, nil, function() return shared.M64PiPOff ~= true and "Mini screens:  ON" or "Mini screens:  off" end },
             }
             M64UI.selfItem = ITEMS[1]
 
@@ -7174,7 +7189,7 @@ local function main(character, mode)
                 -- skin's face uses: a SurfaceAppearance with AlphaMode.Transparency. Only the face art pixels are drawn, the yellow is see-through.
                 -- If Roblox refuses (no EditableImage / SurfaceAppearance) it quietly falls back to the old way.  Off switch: shared.M64Opts.stantFaceLayer = false
                 local ov = nil
-                if PK.stant and (shared.M64Opts or {}).stantFaceLayer ~= false then
+                if PK.stant and (shared.M64Opts or {}).stantFaceLayer == true then -- (overlay layer is OFF by default now: it left ghost marks of the other faces. set shared.M64Opts.stantFaceLayer = true to bring it back)
                     local okOv, errOv = pcall(function()
                         local headP = piece["Head"]
                         local hp = _M.meshByBone and _M.meshByBone["Head"]
@@ -8320,6 +8335,109 @@ local function main(character, mode)
             end)
             if shared.M64FixCamera == fixCamera then shared.M64FixCamera = nil end
         end
+    end
+
+    do -- MINI SCREENS (picture in picture). BODY screen: the whole Mario doing whatever he is doing, shown in first person / head-look. HEAD screen: his head from the front, shown while you look around with C-up.
+        local okPiP, errPiP = pcall(function()
+            local pg = player:WaitForChild("PlayerGui", 10)
+            if not pg then return end
+            pcall(function() local old = pg:FindFirstChild("M64PiP"); if old then old:Destroy() end end)
+            local gui = Instance.new("ScreenGui")
+            gui.Name = "M64PiP"; gui.ResetOnSpawn = false; gui.DisplayOrder = 50; gui.IgnoreGuiInset = true; gui.Enabled = false
+            gui.Parent = pg
+            local function makeScreen(name, pos, size, ratio)
+                local f = Instance.new("Frame")
+                f.Name = name; f.Position = pos; f.Size = size; f.BackgroundTransparency = 1; f.Parent = gui
+                local ar = Instance.new("UIAspectRatioConstraint"); ar.AspectRatio = ratio; ar.Parent = f
+                local vp = Instance.new("ViewportFrame")
+                vp.Size = UDim2.fromScale(1, 1); vp.BackgroundColor3 = Color3.fromRGB(110, 165, 225); vp.BackgroundTransparency = 0.1
+                vp.Ambient = Color3.fromRGB(175, 175, 175); vp.LightColor = Color3.fromRGB(255, 255, 255); vp.LightDirection = Vector3.new(-0.6, -1.2, -0.8)
+                vp.Parent = f
+                Instance.new("UICorner", vp).CornerRadius = UDim.new(0, 12)
+                local st = Instance.new("UIStroke"); st.Color = Color3.new(1, 1, 1); st.Thickness = 2.5; st.Parent = vp
+                local cam = Instance.new("Camera"); cam.FieldOfView = 40; cam.Parent = vp; vp.CurrentCamera = cam
+                local lab = Instance.new("TextLabel")
+                lab.BackgroundColor3 = Color3.new(0, 0, 0); lab.BackgroundTransparency = 0.35; lab.TextColor3 = Color3.new(1, 1, 1)
+                lab.Size = UDim2.new(1, 0, 0.17, 0); lab.Position = UDim2.fromScale(0, 0.83); lab.Font = Enum.Font.GothamBold; lab.TextScaled = true
+                lab.BorderSizePixel = 0; lab.Text = name; lab.Parent = vp
+                Instance.new("UICorner", lab).CornerRadius = UDim.new(0, 8)
+                return f, vp, cam, lab
+            end
+            local bodyF, bodyVP, bodyCam, bodyLab = makeScreen("BODY", UDim2.fromScale(0.015, 0.31), UDim2.fromScale(0.15, 0.25), 1.0)
+            local headF, headVP, headCam, headLab = makeScreen("HEAD", UDim2.fromScale(0.175, 0.31), UDim2.fromScale(0.11, 0.2), 1.0)
+            bodyF.Visible, headF.Visible = false, false
+            -- copies of Mario's parts for the mini screens (they follow the real parts every frame)
+            local clones, headClone = {}, nil
+            local function cleanClone(c)
+                for _, ch in ipairs(c:GetChildren()) do
+                    if ch:IsA("JointInstance") or ch:IsA("WeldConstraint") or ch:IsA("Attachment") or ch:IsA("Sound") or ch:IsA("ParticleEmitter") or ch:IsA("LuaSourceContainer") or ch:IsA("Constraint") then ch:Destroy() end
+                end
+                c.Anchored = true; c.CanCollide = false; c.CanQuery = false; c.CanTouch = false; c.Massless = true
+            end
+            for name, part in pairs(piece) do
+                local ok, c = pcall(function() return part:Clone() end)
+                if ok and c then
+                    cleanClone(c); c.Parent = bodyVP; clones[name] = c
+                end
+            end
+            if piece["Head"] then
+                local ok, c = pcall(function() return piece["Head"]:Clone() end)
+                if ok and c then cleanClone(c); c.Parent = headVP; headClone = c end
+            end
+            local headFwd = nil -- the direction his face points, in the head part's own space (measured once while he stands still)
+            local function showFlag() return shared.M64PiPOff ~= true end
+            local conn
+            local function cleanup()
+                if conn then pcall(function() conn:Disconnect() end); conn = nil end
+                pcall(function() gui:Destroy() end)
+            end
+            conn = RunService.RenderStepped:Connect(function()
+                if PK.killed or not character.Parent or not root.Parent then cleanup() return end
+                local hp = piece["Head"]
+                local cam = workspace.CurrentCamera
+                if not showFlag() or not hp or not cam then gui.Enabled = false return end
+                if headFwd == nil or (not _M.lookOn and tostring(state) == "Idle") then
+                    pcall(function() headFwd = hp.CFrame:VectorToObjectSpace(dirOf(faceYaw)) end)
+                end
+                local close = (cam.CFrame.Position - hp.Position).Magnitude < 3.5
+                local want = (_M.lookOn == true) or close
+                local wantHead = _M.lookOn == true
+                if not want or humanoid.Health <= 0 then gui.Enabled = false return end
+                gui.Enabled = true
+                bodyF.Visible, headF.Visible = true, wantHead
+                -- BODY: keep the copies posed like the real Mario, camera looks at him from the front-right
+                for name, c in pairs(clones) do
+                    local rp = piece[name]
+                    if rp and rp.Parent then
+                        c.CFrame = rp.CFrame
+                        if c.Size ~= rp.Size then pcall(function() c.Size = rp.Size end) end
+                        c.Transparency = rp.Transparency
+                    end
+                end
+                local h = CFG.ModelHeight or 5
+                local center = root.Position + Vector3.new(0, h * 0.45, 0)
+                local fwd = dirOf(faceYaw)
+                local right = fwd:Cross(Vector3.yAxis)
+                local pos = center + (fwd * 0.85 + right * 0.55 + Vector3.new(0, 0.3, 0)).Unit * math.max(h * 2.7, 6)
+                bodyCam.CFrame = CFrame.lookAt(pos, center)
+                bodyLab.Text = tostring(state)
+                -- HEAD: front view of his head, so you see where he looks and his face
+                if wantHead and headClone then
+                    headClone.CFrame = hp.CFrame
+                    if headClone.Size ~= hp.Size then pcall(function() headClone.Size = hp.Size end) end
+                    headClone.Transparency = hp.Transparency
+                    local hf = headFwd and hp.CFrame:VectorToWorldSpace(headFwd) or fwd
+                    local hc = hp.Position
+                    local d = math.max(hp.Size.X, hp.Size.Y, hp.Size.Z) * 1.9
+                    headCam.CFrame = CFrame.lookAt(hc + hf.Unit * d + Vector3.new(0, d * 0.08, 0), hc)
+                    headLab.Text = "HEAD"
+                end
+            end)
+            shared.M64PiPToggle = function() shared.M64PiPOff = not (shared.M64PiPOff == true) end
+            local prevKill = PK.fxKill
+            PK.fxKill = function() if prevKill then pcall(prevKill) end cleanup() end
+        end)
+        if not okPiP then warn("[Mario64] mini screens failed: " .. tostring(errPiP)) end
     end
 
     humanoid.Died:Connect(function()
