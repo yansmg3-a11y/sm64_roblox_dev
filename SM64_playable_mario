@@ -1,4 +1,4 @@
-shared.M64Build = "20261124-14" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261125-3" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -692,7 +692,7 @@ local function main(character, mode)
                 local bw, bh, TAIL = math.ceil(sz.X) + 26, math.ceil(sz.Y) + 14, 8
                 local g = Instance.new("BillboardGui")
                 g.Name = "M64StantSay"; g.Adornee = root; g.Size = UDim2.fromOffset(bw + 4, bh + TAIL + 4)
-                g.StudsOffset = Vector3.new(0, (h or 5) * 0.5 + 0.8, 0); g.ExtentsOffset = Vector3.new(0, 0.5, 0) -- the tail tip sits on the anchor point
+                g.StudsOffset = Vector3.new(0, (h or 5) * 0.5 + 0.8, 0); g.ExtentsOffset = Vector3.new(0, 0.5, 0); g.SizeOffset = Vector2.new(0, 0.5) -- the tail tip sits on the anchor point
                 g.AlwaysOnTop = true; g.MaxDistance = 120; g.LightInfluence = 0; g.ResetOnSpawn = false
                 local function diamond(side, color, z)
                     local d = Instance.new("Frame")
@@ -715,6 +715,13 @@ local function main(character, mode)
                 g.Parent = root
                 task.delay(1.2, function() if g.Parent then g:Destroy() end end)
         end)
+    end
+
+    -- Luigi's voice is the same set of Mario lines, played a bit higher (a higher pitch, as in the games). Change LUIGI_PITCH to taste (1.0 = same as Mario).
+    _M.LUIGI_PITCH = 1.2
+    _M.LUIGI_VOICE = { jump = true, jump2 = true, jump3 = true, longjump = true, backflip = true, wallkick = true, punch = true, kick = true, dive = true, pound = true, land = true, tripleland = true }
+    function _M.voicePitch(name)
+        return (PK.luigi and _M.LUIGI_VOICE[name]) and _M.LUIGI_PITCH or 1
     end
 
     function _M.soundAsset(name)
@@ -2234,6 +2241,7 @@ local function main(character, mode)
             if blendT >= 1 then blendFrom = nil end
         end
         if CFG.GL.on and CFG.GL.pose then pos = CFG.GL.pose(pose, pos, dt) or pos end
+        if _M.RAG and _M.RAG.on then pcall(_M.RAG.pose, pose, pos, dt) end
         local tilt = CFrame.fromAxisAngle(CFG.TiltForwardAxis, tiltPitch * CFG.TiltForwardSign)
         * CFrame.fromAxisAngle(CFG.TiltSideAxis, tiltRoll * CFG.TiltSideSign)
         for j = 1, #ROT do
@@ -3718,6 +3726,171 @@ local function main(character, mode)
     local FXS = { wing = not PK.netpeer and player:GetAttribute("M64Wing") == true, metal = not PK.netpeer and player:GetAttribute("M64Metal") == true, gliding = false, wasGliding = false, lastFlap = -10,
         glide = {} } -- no free gliding on ordinary jumps: like the game, the wing cap only flies after a TRIPLE jump (state "Fly")
     local NOPITCH = { LongJump = true, AirKick = true, GPStart = true, GroundPound = true, Backflip = true, TripleJump = true, SideFlip = true, AirBonk = true, WallKick = true }
+    -- ---------- Ragdoll ----------
+    -- Mario goes limp (arms, legs and head flop around with his movement) when:
+    --   * the GAME ragdolls your character (it detects the Ragdoll / FallingDown states, "ragdoll" flags and attributes, or the joints a ragdoll script turns off)
+    --   * you type /ragdoll (or /rag) in chat, or tap "Ragdoll" in the SM64 menu: Mario ragdolls anywhere, even in a game with no ragdoll of its own (like Co-op DX)
+    -- Turn "Auto Ragdoll With The Game" off in the menu if you only want the command. A manual ragdoll ends by itself after he rests, or press Jump to get up.
+    _M.RAG = { on = false, selfMade = false, t0 = 0, rest = 0, chk = 0, gameOn = false, lastVel = Vector3.zero, sp = {}, conns = {}, lastTog = 0 }
+    do (function() -- own function = own local limit (this script is near the 200-local limit)
+        local R = _M.RAG
+        local FLOP = { ["Left Arm"] = 1, ["Right Arm"] = 1, ["Left Forearm"] = 1.4, ["Right Forearm"] = 1.4, ["Left Thigh"] = 0.6, ["Right Thigh"] = 0.6, ["Left Leg"] = 0.9, ["Right Leg"] = 0.9, ["Head"] = 0.7 }
+        local function note(txt)
+            pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Mario script", Text = txt, Duration = 3 }) end)
+        end
+        -- does the game think the character is ragdolled right now?
+        function R.game()
+            local ok, res = pcall(function()
+                local st = humanoid:GetState()
+                if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then return true end
+                for _, o in ipairs({ character, humanoid, root, player }) do
+                    for name, v in pairs(o:GetAttributes()) do
+                        if v == true and string.find(string.lower(name), "ragdoll", 1, true) then return true end
+                    end
+                    for _, c in ipairs(o:GetChildren()) do
+                        if c:IsA("BoolValue") and c.Value == true and string.find(string.lower(c.Name), "ragdoll", 1, true) then return true end
+                    end
+                end
+                local off, balls = 0, 0
+                for _, d in ipairs(character:GetDescendants()) do
+                    if not d:IsDescendantOf(marioModel) then
+                        if d:IsA("Motor6D") and d.Enabled == false then off += 1
+                        elseif d:IsA("BallSocketConstraint") then balls += 1 end
+                    end
+                end
+                if off >= 2 then return true end
+                if balls > 0 and (humanoid.PlatformStand or st == Enum.HumanoidStateType.Physics) then return true end
+                return false
+            end)
+            return ok and res == true
+        end
+        function R.begin(mine)
+            R.on, R.selfMade, R.t0, R.rest = true, mine, os.clock(), 0
+            R.lastVel = root.AssemblyLinearVelocity
+            table.clear(R.sp)
+            hv = Vector3.zero; fVel = 0
+            pcall(setState, "Fall")
+            if mine then
+                pcall(function()
+                    local v = root.AssemblyLinearVelocity
+                    humanoid.PlatformStand = true
+                    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                    root.AssemblyLinearVelocity = Vector3.new(v.X * 0.7, math.max(v.Y, 0) + 22, v.Z * 0.7)
+                    root.AssemblyAngularVelocity = Vector3.new((math.random() - 0.5) * 10, (math.random() - 0.5) * 6, (math.random() - 0.5) * 10)
+                end)
+            end
+        end
+        function R.stop(quiet)
+            local mine = R.selfMade
+            R.on, R.selfMade = false, false
+            table.clear(R.sp)
+            if mine and not quiet then
+                pcall(function()
+                    local look = root.CFrame.LookVector
+                    local yaw = (Vector3.new(look.X, 0, look.Z).Magnitude > 0.1) and math.atan2(-look.X, -look.Z) or 0
+                    root.AssemblyAngularVelocity = Vector3.zero
+                    root.AssemblyLinearVelocity = Vector3.zero
+                    root.CFrame = CFrame.new(root.Position + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, yaw, 0)
+                    humanoid.PlatformStand = false
+                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end)
+                hv = Vector3.zero; fVel = 0
+                pcall(setState, "Fall")
+                pcall(play, "general_fall", 1, 0.1)
+            elseif mine then
+                pcall(function() humanoid.PlatformStand = false end)
+            end
+        end
+        function R.toggle()
+            if os.clock() - R.lastTog < 0.3 then return end
+            R.lastTog = os.clock()
+            if PK.puppet or dead or humanoid.Health <= 0 then return end
+            if R.on then
+                if R.selfMade then R.stop() else note("The game's ragdoll is on - Mario gets up when the game lets you up.") end
+            else
+                R.begin(true)
+            end
+        end
+        -- called every frame from the main step; returns true while ragdolled (Mario's normal controls are skipped)
+        function R.step(dt)
+            if PK.puppet or dead or humanoid.Health <= 0 then
+                if R.on then R.stop(true) end
+                return false
+            end
+            local now = os.clock()
+            if not R.selfMade then
+                if now >= R.chk then
+                    R.chk = now + 0.15
+                    R.gameOn = ((shared.M64Opts or {}).ragdollGame ~= false) and R.game() or false
+                end
+                if R.gameOn and not R.on then R.begin(false)
+                elseif not R.gameOn and R.on then R.stop() end
+            end
+            if not R.on then return false end
+            hv = Vector3.zero; fVel = 0
+            pcall(play, "dying", 1, 0.08)
+            if R.selfMade then
+                if not humanoid.PlatformStand then humanoid.PlatformStand = true end
+                local held = now - R.t0
+                local still = root.AssemblyLinearVelocity.Magnitude < 2.5 and humanoid.FloorMaterial ~= Enum.Material.Air
+                R.rest = still and (R.rest + dt) or 0
+                if held > 0.9 and fresh("jump", 0.25) then eat("jump"); R.stop(); return false end
+                if held > 7 or (held > 1.2 and R.rest > 1.1) then R.stop(); return false end
+            end
+            return true
+        end
+        -- floppy limbs: springs driven by Mario's acceleration and spin (a hook inside applyPose)
+        function R.pose(pose, pos, dt)
+            if not R.on then return nil end
+            dt = math.clamp(dt, 1 / 240, 0.05)
+            local v = root.AssemblyLinearVelocity
+            local a = (v - R.lastVel) / dt
+            R.lastVel = v
+            a = Vector3.new(math.clamp(a.X, -150, 150), math.clamp(a.Y, -150, 150), math.clamp(a.Z, -150, 150))
+            local cf = root.CFrame
+            local la = cf:VectorToObjectSpace(a)
+            local w = cf:VectorToObjectSpace(root.AssemblyAngularVelocity)
+            for j = 1, #ROT do
+                local k = FLOP[ROT[j]]
+                if k then
+                    local st = R.sp[j]
+                    if not st then st = { 0, 0, 0, 0 }; R.sp[j] = st end
+                    local tx = math.clamp(-la.Z * k * 0.012 + w.X * k * 0.06 - 0.25 * k, -1.2, 1.2)
+                    local tz = math.clamp(la.X * k * 0.012 + w.Z * k * 0.06, -1.2, 1.2)
+                    st[2] += ((tx - st[1]) * 80 - st[2] * 6) * dt
+                    st[4] += ((tz - st[3]) * 80 - st[4] * 6) * dt
+                    st[1] += st[2] * dt
+                    st[3] += st[4] * dt
+                    pose[j] = pose[j] * CFrame.Angles(st[1], 0, st[3])
+                end
+            end
+            return nil
+        end
+        function R.cleanup()
+            for _, c in ipairs(R.conns) do pcall(function() c:Disconnect() end) end
+            table.clear(R.conns)
+            if R.cmd then pcall(function() R.cmd:Destroy() end); R.cmd = nil end
+            if R.on then pcall(R.stop, true) end
+        end
+        if not PK.puppet then
+            -- chat command: /ragdoll or /rag (new TextChat and the old chat)
+            pcall(function()
+                local TCS = game:GetService("TextChatService")
+                for _, c in ipairs(TCS:GetChildren()) do if c.Name == "M64RagdollCmd" then c:Destroy() end end
+                local cmd = Instance.new("TextChatCommand")
+                cmd.Name = "M64RagdollCmd"; cmd.PrimaryAlias = "/ragdoll"; cmd.SecondaryAlias = "/rag"
+                cmd.Parent = TCS
+                R.cmd = cmd
+                R.conns[#R.conns + 1] = cmd.Triggered:Connect(function() R.toggle() end)
+            end)
+            pcall(function()
+                R.conns[#R.conns + 1] = player.Chatted:Connect(function(m)
+                    m = string.lower(tostring(m)):gsub("%s+$", "")
+                    if m == "/ragdoll" or m == "/rag" then R.toggle() end
+                end)
+            end)
+        end
+    end)() end
     local function step(dt)
         if carried then
             local ch = carried:FindFirstChildOfClass("Humanoid")
@@ -3761,6 +3934,10 @@ local function main(character, mode)
             else
                 faceYaw += math.rad(_M.SP.rate) * dt
             end
+        end
+        do
+            local okR, ragged = pcall(_M.RAG.step, dt) -- ragdoll: skips Mario's own controls while he is limp
+            if okR and ragged then return end
         end
         do
             local okA, handled = pcall(ACC.step, dt)
@@ -5144,7 +5321,7 @@ local function main(character, mode)
                 if not asset then return end
                 local sound = Instance.new("Sound")
                 sound.SoundId = asset
-                sound.PlaybackSpeed = playback * (0.97 + math.random() * 0.06)
+                sound.PlaybackSpeed = playback * _M.voicePitch(name) * (0.97 + math.random() * 0.06)
                 sound.Volume = volume or 1
                 sound.RollOffMaxDistance = 150
                 sound.Parent = root
@@ -5993,6 +6170,8 @@ local function main(character, mode)
                 { "  Battle Shake", function() return (shared.M64Battle and shared.M64Battle.shake or 1) > 0 end, function() local B = shared.M64Battle; if B then local v = { 0, 0.5, 1, 1.6 }; local i = 1; for k, x in ipairs(v) do if x == B.shake then i = k end end; B.shake = v[i % #v + 1] end end, function() return opts.battleMusic ~= false end, function() local B = shared.M64Battle; local sh = B and B.shake or 1; return "Beat screen shake:  " .. (sh == 0 and "off" or (sh < 1 and "low" or (sh > 1 and "high" or "normal"))) .. "  (tap = change)" end, _M.MUS.blue },
                 { "Dev Screen", function() return opts.dev == true end, function() opts.dev = not (opts.dev == true) end },
                 { "N64 Controller Display", function() return opts.padHud ~= false end, function() opts.padHud = not (opts.padHud ~= false) end },
+                { "Ragdoll (tap, or type /ragdoll)", function() return _M.RAG ~= nil and _M.RAG.on end, function() if _M.RAG then _M.RAG.toggle() end end, nil, function() return (_M.RAG ~= nil and _M.RAG.on) and "Ragdoll:  ON  (tap = get up)" or "Ragdoll  (tap, or /ragdoll)" end },
+                { "Auto Ragdoll With The Game", function() return opts.ragdollGame ~= false end, function() opts.ragdollGame = not (opts.ragdollGame ~= false) end },
                 { "Unfreeze Mario (Anti-Lock)", function() return opts.antiLock ~= false end, function() opts.antiLock = not (opts.antiLock ~= false) end, nil, function() local a = shared.M64AntiLock; local on = opts.antiLock ~= false; return "Anti-Lock " .. (on and "ON" or "OFF") .. ":  frees Mario when a game locks him (anchored, frozen, controls off)" .. ((a and a.fixes > 0) and ("  ::  fixed " .. a.fixes .. "x, last: " .. a.last) or "") end },
                 { "Same Jump Gravity (every game)", function() return opts.fixedGravity ~= false end, function() opts.fixedGravity = not (opts.fixedGravity ~= false) end, nil, function() return (opts.fixedGravity ~= false) and "Jumps reach the same height in every game, whatever its gravity" or "Jumps follow the game's own gravity (stronger gravity = lower jumps)" end },
                 { "Variable Jump Height", function() return opts.varJump == true end, function() opts.varJump = not (opts.varJump == true) end, nil, function() return (opts.varJump == true) and "Letting go of jump early cuts a single / double jump short" or "Off: every jump goes full height, even a quick tap (SM64 style)" end },
@@ -6055,14 +6234,17 @@ local function main(character, mode)
                             pg2.Parent = PlayerGui
                             fxTrack({ Disconnect = function() pcall(function() pg2:Destroy() end) end })
                             local vsz = workspace.CurrentCamera.ViewportSize
-                            local sc = math.clamp(vsz.Y / 400, 0.8, 1.8) * 0.9
+                            local sc = math.clamp(vsz.Y / 400, 0.7, 1.3) * 0.55 -- smaller than before (it was ~2x too big and covered the game HUD)
                             local W, H = 103 * sc, 95 * sc
                             local meter = Instance.new("ImageLabel")
                             meter.AnchorPoint = Vector2.new(1, 0)
                             meter.Size = UDim2.fromOffset(W, H)
                             meter.BackgroundTransparency = 1
                             meter.ImageContent = ringC
-                            meter.Position = UDim2.new(1, -12, 0, -H - 10)
+                            local basePos = shared.M64MeterPos or UDim2.new(1, -12, 0, 8)
+                            local function hiddenPos() return UDim2.new(basePos.X.Scale, basePos.X.Offset, 0, -H - 10) end
+                            meter.Position = hiddenPos()
+                            meter.Active = true
                             meter.Parent = pg2
                             local pie = Instance.new("ImageLabel")
                             pie.BackgroundTransparency = 1
@@ -6075,7 +6257,31 @@ local function main(character, mode)
                             local function slide(on)
                                 if shown == on then return end
                                 shown = on
-                                TS:Create(meter, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { Position = on and UDim2.new(1, -12, 0, 8) or UDim2.new(1, -12, 0, -H - 10) }):Play()
+                                TS:Create(meter, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { Position = on and basePos or hiddenPos() }):Play()
+                            end
+                            -- drag the meter (mouse or finger) to put it where it does not cover anything; the spot is remembered
+                            do
+                                local UIS2 = game:GetService("UserInputService")
+                                local dragging, dStart, dPos = false, nil, nil
+                                local function isPtr(i) return i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch end
+                                meter.InputBegan:Connect(function(i)
+                                    if shown and isPtr(i) then
+                                        dragging, dStart, dPos = true, i.Position, meter.Position
+                                        i.Changed:Connect(function()
+                                            if i.UserInputState == Enum.UserInputState.End then
+                                                dragging = false
+                                                basePos = meter.Position; shared.M64MeterPos = basePos
+                                            end
+                                        end)
+                                    end
+                                end)
+                                local cn = UIS2.InputChanged:Connect(function(i)
+                                    if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                                        local d = i.Position - dStart
+                                        meter.Position = UDim2.new(dPos.X.Scale, dPos.X.Offset + d.X, dPos.Y.Scale, dPos.Y.Offset + d.Y)
+                                    end
+                                end)
+                                fxTrack(cn)
                             end
                             task.spawn(function()
                                     while pg2.Parent do
@@ -7264,7 +7470,7 @@ local function main(character, mode)
     do (function()
                 local AL = shared.M64AntiLock
                 if not AL then AL = { fixes = 0, last = "" }; shared.M64AntiLock = AL end
-                local function alEnabled() return (shared.M64Opts or {}).antiLock ~= false and not PK.killed and not PK.puppet end
+                local function alEnabled() return (shared.M64Opts or {}).antiLock ~= false and not PK.killed and not PK.puppet and not (_M.RAG and _M.RAG.on) end
                 local K = Enum.KeyCode
                 -- direct input (used by getMove when the game's controls return nothing)
                 _M.directMove = function()
@@ -8148,6 +8354,7 @@ local function main(character, mode)
         pcall(function() if poseConn then poseConn:Disconnect() end end)
         pcall(function() if stepConn then stepConn:Disconnect() end end)
         pcall(function() if PK.fxKill then PK.fxKill() end end)
+        pcall(function() if _M.RAG and _M.RAG.cleanup then _M.RAG.cleanup() end end)
         pcall(function() marioModel:Destroy() end)
         pcall(function() local t = character:FindFirstChild("Mario64Active"); if t then t:Destroy() end end)
         for d, t in pairs(PK.origT) do
@@ -8259,7 +8466,7 @@ local function main(character, mode)
                 sound.RollOffMinDistance = 7
                 sound.RollOffMaxDistance = 150
                 sound.RollOffMode = Enum.RollOffMode.Inverse
-                sound.PlaybackSpeed = playbackSpeed
+                sound.PlaybackSpeed = playbackSpeed * _M.voicePitch(name)
                 sound.Parent = root
                 sound:Play()
                 Debris:AddItem(sound, 5)
@@ -9755,7 +9962,7 @@ do
                 if st then pcall(function() st.gui:Destroy() end) end
                 local g = Instance.new("BillboardGui")
                 g.Name = "M64ChatBubble"; g.Adornee = root; g.Size = UDim2.fromOffset(chat.maxWidth + 40, 360)
-                g.StudsOffset = Vector3.new(0, off, 0); g.ExtentsOffset = Vector3.new(0, 0.5, 0)
+                g.StudsOffset = Vector3.new(0, off, 0); g.ExtentsOffset = Vector3.new(0, 0.5, 0); g.SizeOffset = Vector2.new(0, 0.5) -- SizeOffset: bottom of the frame (= tail tip) sits on the anchor, above the head
                 g.AlwaysOnTop = true; g.MaxDistance = 160; g.LightInfluence = 0; g.ResetOnSpawn = false
                 local lf = Instance.new("Frame"); lf.BackgroundTransparency = 1; lf.Size = UDim2.fromScale(1, 1); lf.Parent = g
                 local ly = Instance.new("UIListLayout")
