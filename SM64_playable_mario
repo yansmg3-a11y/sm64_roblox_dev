@@ -1,4 +1,4 @@
-shared.M64Build = "20261124-12" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261124-14" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -687,15 +687,31 @@ local function main(character, mode)
         pcall(function()
                 local old = root:FindFirstChild("M64StantSay")
                 if old then old:Destroy() end
+                local font, size, white, edge = Enum.Font.PatrickHand, 20, Color3.new(1, 1, 1), Color3.fromRGB(55, 55, 62)
+                local sz = game:GetService("TextService"):GetTextSize(text, size, font, Vector2.new(260, 10000))
+                local bw, bh, TAIL = math.ceil(sz.X) + 26, math.ceil(sz.Y) + 14, 8
                 local g = Instance.new("BillboardGui")
-                g.Name = "M64StantSay"; g.Adornee = root; g.Size = UDim2.fromOffset(150, 34)
-                g.StudsOffset = Vector3.new(0, (h or 5) * 0.63 + 2.6, 0); g.AlwaysOnTop = true; g.MaxDistance = 120
+                g.Name = "M64StantSay"; g.Adornee = root; g.Size = UDim2.fromOffset(bw + 4, bh + TAIL + 4)
+                g.StudsOffset = Vector3.new(0, (h or 5) * 0.5 + 0.8, 0); g.ExtentsOffset = Vector3.new(0, 0.5, 0) -- the tail tip sits on the anchor point
+                g.AlwaysOnTop = true; g.MaxDistance = 120; g.LightInfluence = 0; g.ResetOnSpawn = false
+                local function diamond(side, color, z)
+                    local d = Instance.new("Frame")
+                    d.AnchorPoint = Vector2.new(0.5, 0.5); d.Position = UDim2.new(0.5, 0, 0, 2 + bh)
+                    d.Size = UDim2.fromOffset(side, side); d.Rotation = 45; d.BackgroundColor3 = color; d.BorderSizePixel = 0; d.ZIndex = z
+                    d.Parent = g
+                end
+                diamond(TAIL * 1.45, edge, 1)
+                local body = Instance.new("Frame")
+                body.Position = UDim2.fromOffset(2, 2); body.Size = UDim2.fromOffset(bw, bh)
+                body.BackgroundColor3 = white; body.BorderSizePixel = 0; body.ZIndex = 2
+                local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 12); c.Parent = body
+                local st = Instance.new("UIStroke"); st.Color = edge; st.Thickness = 2; st.Parent = body
+                body.Parent = g
+                diamond(TAIL * 1.2, white, 3)
                 local t = Instance.new("TextLabel")
-                t.Size = UDim2.fromScale(1, 1); t.BackgroundColor3 = Color3.fromRGB(255, 255, 255); t.BackgroundTransparency = 0.08
-                t.TextColor3 = Color3.fromRGB(30, 30, 30); t.Font = Enum.Font.GothamBold; t.TextScaled = true; t.Text = text
-                local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0.4, 0); c.Parent = t
-                local p = Instance.new("UIPadding"); p.PaddingLeft = UDim.new(0, 8); p.PaddingRight = UDim.new(0, 8); p.PaddingTop = UDim.new(0, 4); p.PaddingBottom = UDim.new(0, 4); p.Parent = t
-                t.Parent = g
+                t.BackgroundTransparency = 1; t.Size = UDim2.fromScale(1, 1); t.ZIndex = 4
+                t.TextColor3 = Color3.fromRGB(32, 32, 38); t.Font = font; t.TextSize = size; t.TextWrapped = true; t.RichText = false; t.Text = text
+                t.Parent = body
                 g.Parent = root
                 task.delay(1.2, function() if g.Parent then g:Destroy() end end)
         end)
@@ -4441,10 +4457,13 @@ local function main(character, mode)
             end
             local function updateShadow()
                 if not opts.shadow then hideShadow() return end
-                local origin = root.Position
-                local res = workspace:Raycast(origin, Vector3.new(0, -400, 0), shadowRay)
+                -- the shadow follows the HIPS sideways (flat on the ground, never rotated), height still comes from the root
+                local rp = root.Position
+                local hipPart = marioModel:FindFirstChild("M64_Butt")
+                local hp = hipPart and hipPart.Position or rp
+                local res = workspace:Raycast(Vector3.new(hp.X, rp.Y + 1, hp.Z), Vector3.new(0, -400, 0), shadowRay)
                 if not res then hideShadow() return end
-                local h = math.max(origin.Y - feetOffset() - res.Position.Y, 0)
+                local h = math.max(rp.Y - feetOffset() - res.Position.Y, 0)
                 local k = math.clamp(1 - h / 80, 0.35, 1)
                 local vis = math.clamp(1 - h / 200, 0.2, 1)
                 local d = CFG.ModelHeight * 0.85 * k
@@ -5980,6 +5999,7 @@ local function main(character, mode)
                 { "Room Echo (SM64)", function() return opts.roomEcho ~= false end, function() opts.roomEcho = not (opts.roomEcho ~= false) end, nil, function() local r = shared.M64Room; if opts.roomEcho == false then return "Room Echo OFF: no echo anywhere" end; return "Room Echo ON: Mario's sounds echo like the room he is in (now: " .. ((r and r.label) or "...") .. ")" end },
                 { "Room Echo: Whole Game Audio", function() return opts.roomEchoAll == true end, function() opts.roomEchoAll = not (opts.roomEchoAll == true) end, nil, function() return (opts.roomEchoAll == true) and "The game's own sounds echo too (Roblox ambient reverb follows the room)" or "Off: only Mario's sounds echo" end },
                 { "Camera Follows Mario", function() return opts.camFollow ~= false end, function() opts.camFollow = not (opts.camFollow ~= false) end },
+                { "Auto-Fix Stuck Camera", function() return opts.camAutoFix ~= false end, function() opts.camAutoFix = not (opts.camAutoFix ~= false) end },
                 { "B = Game Attack Button", function() return opts.gameAtk ~= false end, function() opts.gameAtk = not (opts.gameAtk ~= false) end, nil, function() local f = _M.gameAct and _M.gameAct.found; if opts.gameAtk == false then return "Game attack button:  off" end return "B presses the game's own attack:  " .. (f and f.label or "none found yet") end },
                 { "Game UI Over Controls", function() return opts.gameUiOver ~= false end, function() opts.gameUiOver = not (opts.gameUiOver ~= false); pcall(function() local g = player.PlayerGui:FindFirstChild("MarioControls"); if g then g.DisplayOrder = (opts.gameUiOver ~= false) and -50 or 0 end end) end, nil, function() return (opts.gameUiOver ~= false) and "Game buttons cover the SM64 touch buttons (A and Z stay on top)" or "SM64 touch buttons on top of the game's UI" end },
                 { "Touch Style (New / Old)", function() return opts.touchStyle ~= "classic" end, function() opts.touchStyle = (opts.touchStyle ~= "classic") and "classic" or "n64"; if _M.applyTouchStyle then task.spawn(_M.applyTouchStyle) end end, nil, function() return (opts.touchStyle ~= "classic") and "Touch buttons:  NEW (N64 layout)  - tap to go to the OLD round buttons" or "Touch buttons:  OLD (classic round buttons)  - tap to go back to the NEW N64 layout" end },
@@ -7582,11 +7602,42 @@ local function main(character, mode)
                 end
                 -- camera: it is the normal camera, but it never leaves Mario (also after he dies)
                 if not PK.puppet then
-                    track(RunService.RenderStepped:Connect(function()
+                    -- auto-fix: if the camera stays broken for 1.5 s (stuck on Scriptable, wrong subject, far away, or inside a wall) it is reset
+                    _M.camFix = { acc = 0, bad = 0, fixed = 0, params = OverlapParams.new() } -- (kept in _M: main() is close to Luau's local-variable limit)
+                    _M.camFix.params.FilterType = Enum.RaycastFilterType.Exclude
+                    track(RunService.RenderStepped:Connect(function(dt)
+                                local CF = _M.camFix
                                 if PK.killed or opts.camFollow == false then return end
                                 local cam = workspace.CurrentCamera
                                 if cam and humanoid.Parent and cam.CameraType ~= Enum.CameraType.Scriptable and cam.CameraSubject ~= humanoid then
                                     cam.CameraSubject = humanoid
+                                end
+                                CF.acc += dt
+                                if CF.acc < 0.25 then return end
+                                local step = CF.acc
+                                CF.acc = 0
+                                if not cam or opts.camAutoFix == false or humanoid.Health <= 0 or not humanoid.Parent or not root or not root.Parent or _M.lookOn then
+                                    CF.bad = 0 -- (the look-around camera and the death camera are meant to be Scriptable)
+                                    return
+                                end
+                                local bad, hard = false, false
+                                if cam.CameraType == Enum.CameraType.Scriptable then bad = true end
+                                if (cam.CFrame.Position - root.Position).Magnitude > 120 then bad, hard = true, true end
+                                CF.params.FilterDescendantsInstances = { root.Parent }
+                                for _, p in ipairs(workspace:GetPartBoundsInRadius(cam.CFrame.Position, 0.4, CF.params)) do
+                                    if p.CanCollide and p.Transparency < 0.9 then bad, hard = true, true break end
+                                end
+                                if not bad then CF.bad = 0 return end
+                                CF.bad += step
+                                if CF.bad >= 1.5 and os.clock() - CF.fixed > 1 then
+                                    CF.bad = 0
+                                    CF.fixed = os.clock()
+                                    cam.CameraType = Enum.CameraType.Custom
+                                    cam.CameraSubject = humanoid
+                                    if cam.FieldOfView < 20 or cam.FieldOfView > 100 then cam.FieldOfView = 70 end
+                                    if hard then
+                                        cam.CFrame = CFrame.lookAt(root.Position - root.CFrame.LookVector * 14 + Vector3.new(0, 7, 0), root.Position)
+                                    end
                                 end
                     end))
                 end
@@ -8348,7 +8399,9 @@ local function main(character, mode)
                     return end
                 if os.clock()>nextGroundFilter then nextGroundFilter = os.clock()+1
                     refreshGroundFilter() end
-                local result = workspace:Raycast(root.Position+Vector3.new(0, 1, 0), Vector3.new(0, -400, 0), groundRay)
+                local hipPart = marioModel:FindFirstChild("M64_Butt") -- follow the hips sideways, flat on the ground
+                local hp = hipPart and hipPart.Position or root.Position
+                local result = workspace:Raycast(Vector3.new(hp.X, root.Position.Y+1, hp.Z), Vector3.new(0, -400, 0), groundRay)
                 if not result then shadowImage.ImageTransparency = 1
                     return end
                 if result.Instance and result.Instance:IsA("BasePart") then
@@ -9634,7 +9687,7 @@ do
     -- It only shows messages Roblox has already filtered and delivered to you. Nothing is sent anywhere by this script.
     Net.chat = {
         enabled = true,
-        font = Enum.Font.Antique, textSize = 18, maxWidth = 260,
+        font = Enum.Font.PatrickHand, textSize = 20, maxWidth = 260,
         minTime = 3, maxTime = 8, maxChars = 120,  -- seconds a bubble stays (longer messages stay longer), and the longest message shown
         hideRobloxBubbles = false,                 -- true = turn off Roblox's own bubbles on YOUR screen so you never see two bubbles
         button = true,                             -- the 💬 button (left edge of the screen); false = hide it
@@ -9646,6 +9699,7 @@ do
             "No!", "Okey-dokey!", "Here we go!", "Watch out!", "Oh no...", "Haha!", "I'm ready!", "Wait for me!", "Let's fight!", "Yahoo!",
         },
         bubbles = {},
+        stacks = {},
     }
     do
         local TextService = game:GetService("TextService")
@@ -9663,6 +9717,7 @@ do
         function chat.clear()
             for _, g in pairs(chat.bubbles) do pcall(function() g:Destroy() end) end
             chat.bubbles = {}
+            chat.stacks = {}
             if chat.ui then pcall(function() chat.ui:Destroy() end); chat.ui = nil end
             if bubbleCfgWasEnabled ~= nil then
                 pcall(function() TextChatService.BubbleChatConfiguration.Enabled = bubbleCfgWasEnabled end)
@@ -9688,51 +9743,81 @@ do
             if not root then return end
             local okExt, ext = pcall(function() return char:GetExtentsSize() end)
             local off = math.clamp((okExt and ext.Y or 5) * 0.5 + 0.8, 2, 14) -- just above the head, also for a big / small Mario
-            local old = chat.bubbles[player]
-            if old then pcall(function() old:Destroy() end) end
-
+            local TAIL = 8
+            local white, edge = Color3.new(1, 1, 1), Color3.fromRGB(55, 55, 62)
             local sz = TextService:GetTextSize(text, chat.textSize, chat.font, Vector2.new(chat.maxWidth, 10000))
-            local bw, bh = math.max(sz.X + 28, 44), sz.Y + 18
-            local H = bh + 8 + 12 -- bubble + outline + tail
-            local white, black = Color3.new(1, 1, 1), Color3.new(0, 0, 0)
+            local bw, bh = math.ceil(sz.X) + 26, math.ceil(sz.Y) + 14
 
-            -- the gui is twice as tall as the bubble and the bubble sits in its top half, so the TAIL TIP is exactly at the anchor point
-            local g = Instance.new("BillboardGui")
-            g.Name = "M64ChatBubble"; g.Adornee = root; g.Size = UDim2.fromOffset(bw + 8, H * 2)
-            g.StudsOffset = Vector3.new(0, off, 0); g.AlwaysOnTop = true; g.MaxDistance = 160
-            g.LightInfluence = 0; g.ResetOnSpawn = false
-
-            local function outline(f)
-                local s = Instance.new("UIStroke"); s.Thickness = 3; s.Color = black; s.Parent = f
+            -- one invisible host per speaker; the bubbles are stacked inside it, newest at the bottom (tail tip = anchor point)
+            chat.stacks = chat.stacks or {}
+            local st = chat.stacks[player]
+            if not st or not st.gui.Parent or st.gui.Adornee ~= root then
+                if st then pcall(function() st.gui:Destroy() end) end
+                local g = Instance.new("BillboardGui")
+                g.Name = "M64ChatBubble"; g.Adornee = root; g.Size = UDim2.fromOffset(chat.maxWidth + 40, 360)
+                g.StudsOffset = Vector3.new(0, off, 0); g.ExtentsOffset = Vector3.new(0, 0.5, 0)
+                g.AlwaysOnTop = true; g.MaxDistance = 160; g.LightInfluence = 0; g.ResetOnSpawn = false
+                local lf = Instance.new("Frame"); lf.BackgroundTransparency = 1; lf.Size = UDim2.fromScale(1, 1); lf.Parent = g
+                local ly = Instance.new("UIListLayout")
+                ly.SortOrder = Enum.SortOrder.LayoutOrder; ly.VerticalAlignment = Enum.VerticalAlignment.Bottom
+                ly.HorizontalAlignment = Enum.HorizontalAlignment.Center; ly.Padding = UDim.new(0, 6); ly.Parent = lf
+                g.Parent = root
+                st = {gui = g, list = lf, items = {}, tails = {}, n = 0}
+                chat.stacks[player] = st
+                chat.bubbles[player] = g
             end
-            local tail = Instance.new("Frame")
-            tail.AnchorPoint = Vector2.new(0.5, 0.5); tail.Size = UDim2.fromOffset(14, 14); tail.Rotation = 45
-            tail.Position = UDim2.fromOffset(4 + bw / 2, 4 + bh + 2)
-            tail.BackgroundColor3 = white; tail.BorderSizePixel = 0; tail.ZIndex = 1
-            outline(tail); tail.Parent = g
+            st.n += 1
 
+            local item = Instance.new("Frame")
+            item.BackgroundTransparency = 1; item.Size = UDim2.fromOffset(bw, bh + TAIL); item.LayoutOrder = st.n
+            local function diamond(side, color, z)
+                local d = Instance.new("Frame")
+                d.AnchorPoint = Vector2.new(0.5, 0.5); d.Position = UDim2.new(0.5, 0, 0, bh)
+                d.Size = UDim2.fromOffset(side, side); d.Rotation = 45; d.BackgroundColor3 = color; d.BorderSizePixel = 0; d.ZIndex = z
+                d.Parent = item
+                return d
+            end
+            local tailBack = diamond(TAIL * 1.45, edge, 1) -- grey one behind = the tail outline
             local body = Instance.new("Frame")
-            body.Position = UDim2.fromOffset(4, 4); body.Size = UDim2.fromOffset(bw, bh)
-            body.BackgroundColor3 = white; body.BorderSizePixel = 0; body.ZIndex = 2
+            body.Size = UDim2.fromOffset(bw, bh); body.BackgroundColor3 = white; body.BorderSizePixel = 0; body.ZIndex = 2
             local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, 12); corner.Parent = body
-            outline(body); body.Parent = g
-
-            local patch = Instance.new("Frame") -- hides the outline where the tail joins the bubble
-            patch.AnchorPoint = Vector2.new(0.5, 0.5); patch.Size = UDim2.fromOffset(12, 8)
-            patch.Position = UDim2.fromOffset(4 + bw / 2, 4 + bh)
-            patch.BackgroundColor3 = white; patch.BorderSizePixel = 0; patch.ZIndex = 4; patch.Parent = g
-
+            local stroke = Instance.new("UIStroke"); stroke.Thickness = 2; stroke.Color = edge; stroke.Parent = body
+            body.Parent = item
+            local tailFront = diamond(TAIL * 1.2, white, 3) -- white one on top = the tail fill, also hides the outline where it joins
             local t = Instance.new("TextLabel")
-            t.BackgroundTransparency = 1; t.Position = UDim2.fromOffset(14, 9); t.Size = UDim2.fromOffset(bw - 28, bh - 18)
-            t.Font = chat.font; t.TextSize = chat.textSize; t.TextColor3 = Color3.fromRGB(20, 20, 20)
-            t.TextWrapped = true; t.RichText = false; t.Text = text; t.ZIndex = 3; t.Parent = body
-
-            g.Parent = root
-            chat.bubbles[player] = g
-            task.delay(math.clamp(2 + #text * 0.06, chat.minTime, chat.maxTime), function()
-                if chat.bubbles[player] == g then chat.bubbles[player] = nil end
-                if g.Parent then g:Destroy() end
+            t.BackgroundTransparency = 1; t.Size = UDim2.fromScale(1, 1); t.ZIndex = 4
+            t.Font = chat.font; t.TextSize = chat.textSize; t.TextColor3 = Color3.fromRGB(32, 32, 38)
+            t.TextWrapped = true; t.RichText = false; t.Text = text; t.Parent = body
+            local sc = Instance.new("UIScale"); sc.Scale = 0.6; sc.Parent = item
+            pcall(function()
+                game:GetService("TweenService"):Create(sc, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
             end)
+
+            local function refreshTails()
+                for i, it in ipairs(st.items) do
+                    local tl = st.tails[it]
+                    if tl then tl[1].Visible = (i == #st.items); tl[2].Visible = (i == #st.items) end
+                end
+            end
+            local function drop(it)
+                local idx = table.find(st.items, it)
+                if idx then table.remove(st.items, idx) end
+                st.tails[it] = nil
+                pcall(function() it:Destroy() end)
+                if #st.items == 0 then
+                    pcall(function() st.gui:Destroy() end)
+                    if chat.stacks[player] == st then chat.stacks[player] = nil end
+                    if chat.bubbles[player] == st.gui then chat.bubbles[player] = nil end
+                else
+                    refreshTails()
+                end
+            end
+            item.Parent = st.list
+            st.items[#st.items + 1] = item
+            st.tails[item] = {tailBack, tailFront}
+            refreshTails()
+            while #st.items > 3 do drop(st.items[1]) end -- at most 3 bubbles per player
+            task.delay(math.clamp(2 + #text * 0.06, chat.minTime, chat.maxTime), function() drop(item) end)
         end
 
         local function fromUserId(uid, text)
@@ -9793,6 +9878,32 @@ do
             Net.sendChat(id)
         end
 
+        -- type your own message: it goes through the normal Roblox chat (Roblox filters it), and the bubble code above shows it
+        -- for everyone who runs this script. If the game has no usable Roblox chat, only you see the bubble.
+        function chat.sendText(text)
+            if not Net.active or typeof(text) ~= "string" then return end
+            text = text:gsub("^%s+", ""):gsub("%s+$", "")
+            if text == "" then return end
+            local n = utf8.len(text)
+            if n and n > chat.maxChars then text = text:sub(1, utf8.offset(text, chat.maxChars) - 1) end
+            local now = os.clock()
+            if now - (chat.lastSay or -10) < 1.2 then return end -- anti-spam
+            chat.lastSay = now
+            local sent = false
+            pcall(function()
+                if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
+                    local chans = TextChatService:FindFirstChild("TextChannels")
+                    local general = chans and chans:FindFirstChild("RBXGeneral")
+                    if general then general:SendAsync(text); sent = true end
+                else
+                    local ev = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+                    local say = ev and ev:FindFirstChild("SayMessageRequest")
+                    if say then say:FireServer(text, "All"); sent = true end
+                end
+            end)
+            if not sent then chat.show(localPlayer, text, true) end
+        end
+
         task.spawn(function()
             if not chat.button then return end
             pcall(function()
@@ -9813,15 +9924,31 @@ do
                 btn.Parent = gui
 
                 local panel = Instance.new("Frame")
-                panel.Visible = false; panel.Size = UDim2.fromOffset(230, 320)
+                panel.Visible = false; panel.Size = UDim2.fromOffset(230, 362)
                 panel.AnchorPoint = Vector2.new(0, 0.5); panel.Position = UDim2.new(0, 66, 0.5, 0)
                 panel.BackgroundColor3 = Color3.fromRGB(24, 24, 28); panel.BackgroundTransparency = 0.08; panel.BorderSizePixel = 0
                 local pc = Instance.new("UICorner"); pc.CornerRadius = UDim.new(0, 12); pc.Parent = panel
                 local title = Instance.new("TextLabel")
                 title.BackgroundTransparency = 1; title.Size = UDim2.new(1, 0, 0, 30); title.Font = Enum.Font.GothamBold; title.TextSize = 15
                 title.TextColor3 = Color3.new(1, 1, 1); title.Text = "Say something"; title.Parent = panel
+                local box = Instance.new("TextBox")
+                box.Position = UDim2.fromOffset(8, 32); box.Size = UDim2.new(1, -16, 0, 32)
+                box.BackgroundColor3 = Color3.fromRGB(58, 58, 66); box.BorderSizePixel = 0
+                box.Font = Enum.Font.GothamMedium; box.TextSize = 15; box.TextColor3 = Color3.new(1, 1, 1); box.TextXAlignment = Enum.TextXAlignment.Left
+                box.PlaceholderText = "Type a message + Enter"; box.PlaceholderColor3 = Color3.fromRGB(170, 170, 180)
+                box.Text = ""; box.ClearTextOnFocus = false
+                local bxc = Instance.new("UICorner"); bxc.CornerRadius = UDim.new(0, 8); bxc.Parent = box
+                local bxp = Instance.new("UIPadding"); bxp.PaddingLeft = UDim.new(0, 8); bxp.PaddingRight = UDim.new(0, 8); bxp.Parent = box
+                box.FocusLost:Connect(function(enterPressed)
+                    local msg = box.Text
+                    if enterPressed and msg ~= "" then
+                        box.Text = ""
+                        task.spawn(chat.sendText, msg)
+                    end
+                end)
+                box.Parent = panel
                 local list = Instance.new("ScrollingFrame")
-                list.BackgroundTransparency = 1; list.BorderSizePixel = 0; list.Position = UDim2.fromOffset(8, 32); list.Size = UDim2.new(1, -16, 1, -40)
+                list.BackgroundTransparency = 1; list.BorderSizePixel = 0; list.Position = UDim2.fromOffset(8, 72); list.Size = UDim2.new(1, -16, 1, -80)
                 list.ScrollBarThickness = 4; list.CanvasSize = UDim2.new(); list.AutomaticCanvasSize = Enum.AutomaticSize.Y
                 local ll = Instance.new("UIListLayout"); ll.Padding = UDim.new(0, 5); ll.Parent = list
                 for i, phrase in ipairs(chat.PHRASES) do
