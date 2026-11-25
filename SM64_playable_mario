@@ -1,4 +1,4 @@
-shared.M64Build = "20261125-3" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261124-14" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -687,41 +687,18 @@ local function main(character, mode)
         pcall(function()
                 local old = root:FindFirstChild("M64StantSay")
                 if old then old:Destroy() end
-                local font, size, white, edge = Enum.Font.PatrickHand, 20, Color3.new(1, 1, 1), Color3.fromRGB(55, 55, 62)
-                local sz = game:GetService("TextService"):GetTextSize(text, size, font, Vector2.new(260, 10000))
-                local bw, bh, TAIL = math.ceil(sz.X) + 26, math.ceil(sz.Y) + 14, 8
                 local g = Instance.new("BillboardGui")
-                g.Name = "M64StantSay"; g.Adornee = root; g.Size = UDim2.fromOffset(bw + 4, bh + TAIL + 4)
-                g.StudsOffset = Vector3.new(0, (h or 5) * 0.5 + 0.8, 0); g.ExtentsOffset = Vector3.new(0, 0.5, 0); g.SizeOffset = Vector2.new(0, 0.5) -- the tail tip sits on the anchor point
-                g.AlwaysOnTop = true; g.MaxDistance = 120; g.LightInfluence = 0; g.ResetOnSpawn = false
-                local function diamond(side, color, z)
-                    local d = Instance.new("Frame")
-                    d.AnchorPoint = Vector2.new(0.5, 0.5); d.Position = UDim2.new(0.5, 0, 0, 2 + bh)
-                    d.Size = UDim2.fromOffset(side, side); d.Rotation = 45; d.BackgroundColor3 = color; d.BorderSizePixel = 0; d.ZIndex = z
-                    d.Parent = g
-                end
-                diamond(TAIL * 1.45, edge, 1)
-                local body = Instance.new("Frame")
-                body.Position = UDim2.fromOffset(2, 2); body.Size = UDim2.fromOffset(bw, bh)
-                body.BackgroundColor3 = white; body.BorderSizePixel = 0; body.ZIndex = 2
-                local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 12); c.Parent = body
-                local st = Instance.new("UIStroke"); st.Color = edge; st.Thickness = 2; st.Parent = body
-                body.Parent = g
-                diamond(TAIL * 1.2, white, 3)
+                g.Name = "M64StantSay"; g.Adornee = root; g.Size = UDim2.fromOffset(150, 34)
+                g.StudsOffset = Vector3.new(0, (h or 5) * 0.63 + 2.6, 0); g.AlwaysOnTop = true; g.MaxDistance = 120
                 local t = Instance.new("TextLabel")
-                t.BackgroundTransparency = 1; t.Size = UDim2.fromScale(1, 1); t.ZIndex = 4
-                t.TextColor3 = Color3.fromRGB(32, 32, 38); t.Font = font; t.TextSize = size; t.TextWrapped = true; t.RichText = false; t.Text = text
-                t.Parent = body
+                t.Size = UDim2.fromScale(1, 1); t.BackgroundColor3 = Color3.fromRGB(255, 255, 255); t.BackgroundTransparency = 0.08
+                t.TextColor3 = Color3.fromRGB(30, 30, 30); t.Font = Enum.Font.GothamBold; t.TextScaled = true; t.Text = text
+                local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0.4, 0); c.Parent = t
+                local p = Instance.new("UIPadding"); p.PaddingLeft = UDim.new(0, 8); p.PaddingRight = UDim.new(0, 8); p.PaddingTop = UDim.new(0, 4); p.PaddingBottom = UDim.new(0, 4); p.Parent = t
+                t.Parent = g
                 g.Parent = root
                 task.delay(1.2, function() if g.Parent then g:Destroy() end end)
         end)
-    end
-
-    -- Luigi's voice is the same set of Mario lines, played a bit higher (a higher pitch, as in the games). Change LUIGI_PITCH to taste (1.0 = same as Mario).
-    _M.LUIGI_PITCH = 1.2
-    _M.LUIGI_VOICE = { jump = true, jump2 = true, jump3 = true, longjump = true, backflip = true, wallkick = true, punch = true, kick = true, dive = true, pound = true, land = true, tripleland = true }
-    function _M.voicePitch(name)
-        return (PK.luigi and _M.LUIGI_VOICE[name]) and _M.LUIGI_PITCH or 1
     end
 
     function _M.soundAsset(name)
@@ -2241,7 +2218,6 @@ local function main(character, mode)
             if blendT >= 1 then blendFrom = nil end
         end
         if CFG.GL.on and CFG.GL.pose then pos = CFG.GL.pose(pose, pos, dt) or pos end
-        if _M.RAG and _M.RAG.on then pcall(_M.RAG.pose, pose, pos, dt) end
         local tilt = CFrame.fromAxisAngle(CFG.TiltForwardAxis, tiltPitch * CFG.TiltForwardSign)
         * CFrame.fromAxisAngle(CFG.TiltSideAxis, tiltRoll * CFG.TiltSideSign)
         for j = 1, #ROT do
@@ -3726,171 +3702,6 @@ local function main(character, mode)
     local FXS = { wing = not PK.netpeer and player:GetAttribute("M64Wing") == true, metal = not PK.netpeer and player:GetAttribute("M64Metal") == true, gliding = false, wasGliding = false, lastFlap = -10,
         glide = {} } -- no free gliding on ordinary jumps: like the game, the wing cap only flies after a TRIPLE jump (state "Fly")
     local NOPITCH = { LongJump = true, AirKick = true, GPStart = true, GroundPound = true, Backflip = true, TripleJump = true, SideFlip = true, AirBonk = true, WallKick = true }
-    -- ---------- Ragdoll ----------
-    -- Mario goes limp (arms, legs and head flop around with his movement) when:
-    --   * the GAME ragdolls your character (it detects the Ragdoll / FallingDown states, "ragdoll" flags and attributes, or the joints a ragdoll script turns off)
-    --   * you type /ragdoll (or /rag) in chat, or tap "Ragdoll" in the SM64 menu: Mario ragdolls anywhere, even in a game with no ragdoll of its own (like Co-op DX)
-    -- Turn "Auto Ragdoll With The Game" off in the menu if you only want the command. A manual ragdoll ends by itself after he rests, or press Jump to get up.
-    _M.RAG = { on = false, selfMade = false, t0 = 0, rest = 0, chk = 0, gameOn = false, lastVel = Vector3.zero, sp = {}, conns = {}, lastTog = 0 }
-    do (function() -- own function = own local limit (this script is near the 200-local limit)
-        local R = _M.RAG
-        local FLOP = { ["Left Arm"] = 1, ["Right Arm"] = 1, ["Left Forearm"] = 1.4, ["Right Forearm"] = 1.4, ["Left Thigh"] = 0.6, ["Right Thigh"] = 0.6, ["Left Leg"] = 0.9, ["Right Leg"] = 0.9, ["Head"] = 0.7 }
-        local function note(txt)
-            pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Mario script", Text = txt, Duration = 3 }) end)
-        end
-        -- does the game think the character is ragdolled right now?
-        function R.game()
-            local ok, res = pcall(function()
-                local st = humanoid:GetState()
-                if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then return true end
-                for _, o in ipairs({ character, humanoid, root, player }) do
-                    for name, v in pairs(o:GetAttributes()) do
-                        if v == true and string.find(string.lower(name), "ragdoll", 1, true) then return true end
-                    end
-                    for _, c in ipairs(o:GetChildren()) do
-                        if c:IsA("BoolValue") and c.Value == true and string.find(string.lower(c.Name), "ragdoll", 1, true) then return true end
-                    end
-                end
-                local off, balls = 0, 0
-                for _, d in ipairs(character:GetDescendants()) do
-                    if not d:IsDescendantOf(marioModel) then
-                        if d:IsA("Motor6D") and d.Enabled == false then off += 1
-                        elseif d:IsA("BallSocketConstraint") then balls += 1 end
-                    end
-                end
-                if off >= 2 then return true end
-                if balls > 0 and (humanoid.PlatformStand or st == Enum.HumanoidStateType.Physics) then return true end
-                return false
-            end)
-            return ok and res == true
-        end
-        function R.begin(mine)
-            R.on, R.selfMade, R.t0, R.rest = true, mine, os.clock(), 0
-            R.lastVel = root.AssemblyLinearVelocity
-            table.clear(R.sp)
-            hv = Vector3.zero; fVel = 0
-            pcall(setState, "Fall")
-            if mine then
-                pcall(function()
-                    local v = root.AssemblyLinearVelocity
-                    humanoid.PlatformStand = true
-                    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-                    root.AssemblyLinearVelocity = Vector3.new(v.X * 0.7, math.max(v.Y, 0) + 22, v.Z * 0.7)
-                    root.AssemblyAngularVelocity = Vector3.new((math.random() - 0.5) * 10, (math.random() - 0.5) * 6, (math.random() - 0.5) * 10)
-                end)
-            end
-        end
-        function R.stop(quiet)
-            local mine = R.selfMade
-            R.on, R.selfMade = false, false
-            table.clear(R.sp)
-            if mine and not quiet then
-                pcall(function()
-                    local look = root.CFrame.LookVector
-                    local yaw = (Vector3.new(look.X, 0, look.Z).Magnitude > 0.1) and math.atan2(-look.X, -look.Z) or 0
-                    root.AssemblyAngularVelocity = Vector3.zero
-                    root.AssemblyLinearVelocity = Vector3.zero
-                    root.CFrame = CFrame.new(root.Position + Vector3.new(0, 1.5, 0)) * CFrame.Angles(0, yaw, 0)
-                    humanoid.PlatformStand = false
-                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-                end)
-                hv = Vector3.zero; fVel = 0
-                pcall(setState, "Fall")
-                pcall(play, "general_fall", 1, 0.1)
-            elseif mine then
-                pcall(function() humanoid.PlatformStand = false end)
-            end
-        end
-        function R.toggle()
-            if os.clock() - R.lastTog < 0.3 then return end
-            R.lastTog = os.clock()
-            if PK.puppet or dead or humanoid.Health <= 0 then return end
-            if R.on then
-                if R.selfMade then R.stop() else note("The game's ragdoll is on - Mario gets up when the game lets you up.") end
-            else
-                R.begin(true)
-            end
-        end
-        -- called every frame from the main step; returns true while ragdolled (Mario's normal controls are skipped)
-        function R.step(dt)
-            if PK.puppet or dead or humanoid.Health <= 0 then
-                if R.on then R.stop(true) end
-                return false
-            end
-            local now = os.clock()
-            if not R.selfMade then
-                if now >= R.chk then
-                    R.chk = now + 0.15
-                    R.gameOn = ((shared.M64Opts or {}).ragdollGame ~= false) and R.game() or false
-                end
-                if R.gameOn and not R.on then R.begin(false)
-                elseif not R.gameOn and R.on then R.stop() end
-            end
-            if not R.on then return false end
-            hv = Vector3.zero; fVel = 0
-            pcall(play, "dying", 1, 0.08)
-            if R.selfMade then
-                if not humanoid.PlatformStand then humanoid.PlatformStand = true end
-                local held = now - R.t0
-                local still = root.AssemblyLinearVelocity.Magnitude < 2.5 and humanoid.FloorMaterial ~= Enum.Material.Air
-                R.rest = still and (R.rest + dt) or 0
-                if held > 0.9 and fresh("jump", 0.25) then eat("jump"); R.stop(); return false end
-                if held > 7 or (held > 1.2 and R.rest > 1.1) then R.stop(); return false end
-            end
-            return true
-        end
-        -- floppy limbs: springs driven by Mario's acceleration and spin (a hook inside applyPose)
-        function R.pose(pose, pos, dt)
-            if not R.on then return nil end
-            dt = math.clamp(dt, 1 / 240, 0.05)
-            local v = root.AssemblyLinearVelocity
-            local a = (v - R.lastVel) / dt
-            R.lastVel = v
-            a = Vector3.new(math.clamp(a.X, -150, 150), math.clamp(a.Y, -150, 150), math.clamp(a.Z, -150, 150))
-            local cf = root.CFrame
-            local la = cf:VectorToObjectSpace(a)
-            local w = cf:VectorToObjectSpace(root.AssemblyAngularVelocity)
-            for j = 1, #ROT do
-                local k = FLOP[ROT[j]]
-                if k then
-                    local st = R.sp[j]
-                    if not st then st = { 0, 0, 0, 0 }; R.sp[j] = st end
-                    local tx = math.clamp(-la.Z * k * 0.012 + w.X * k * 0.06 - 0.25 * k, -1.2, 1.2)
-                    local tz = math.clamp(la.X * k * 0.012 + w.Z * k * 0.06, -1.2, 1.2)
-                    st[2] += ((tx - st[1]) * 80 - st[2] * 6) * dt
-                    st[4] += ((tz - st[3]) * 80 - st[4] * 6) * dt
-                    st[1] += st[2] * dt
-                    st[3] += st[4] * dt
-                    pose[j] = pose[j] * CFrame.Angles(st[1], 0, st[3])
-                end
-            end
-            return nil
-        end
-        function R.cleanup()
-            for _, c in ipairs(R.conns) do pcall(function() c:Disconnect() end) end
-            table.clear(R.conns)
-            if R.cmd then pcall(function() R.cmd:Destroy() end); R.cmd = nil end
-            if R.on then pcall(R.stop, true) end
-        end
-        if not PK.puppet then
-            -- chat command: /ragdoll or /rag (new TextChat and the old chat)
-            pcall(function()
-                local TCS = game:GetService("TextChatService")
-                for _, c in ipairs(TCS:GetChildren()) do if c.Name == "M64RagdollCmd" then c:Destroy() end end
-                local cmd = Instance.new("TextChatCommand")
-                cmd.Name = "M64RagdollCmd"; cmd.PrimaryAlias = "/ragdoll"; cmd.SecondaryAlias = "/rag"
-                cmd.Parent = TCS
-                R.cmd = cmd
-                R.conns[#R.conns + 1] = cmd.Triggered:Connect(function() R.toggle() end)
-            end)
-            pcall(function()
-                R.conns[#R.conns + 1] = player.Chatted:Connect(function(m)
-                    m = string.lower(tostring(m)):gsub("%s+$", "")
-                    if m == "/ragdoll" or m == "/rag" then R.toggle() end
-                end)
-            end)
-        end
-    end)() end
     local function step(dt)
         if carried then
             local ch = carried:FindFirstChildOfClass("Humanoid")
@@ -3934,10 +3745,6 @@ local function main(character, mode)
             else
                 faceYaw += math.rad(_M.SP.rate) * dt
             end
-        end
-        do
-            local okR, ragged = pcall(_M.RAG.step, dt) -- ragdoll: skips Mario's own controls while he is limp
-            if okR and ragged then return end
         end
         do
             local okA, handled = pcall(ACC.step, dt)
@@ -4185,6 +3992,7 @@ local function main(character, mode)
                         _M.lookAY, _M.lookAP = 0, 0
                         _M.prevCamType = cam.CameraType
                         cam.CameraType = Enum.CameraType.Scriptable
+                        shared.M64CamByScript = true -- (the auto camera fix only steps in when the script itself took the camera)
                         if not _M.lookCamConn then
                             -- the camera sits at the BACK OF MARIO'S HEAD (close, a little above) and looks the way his body faces, so you watch his head turn
                             _M.lookCamConn = RunService.RenderStepped:Connect(function(rdt)
@@ -4634,13 +4442,10 @@ local function main(character, mode)
             end
             local function updateShadow()
                 if not opts.shadow then hideShadow() return end
-                -- the shadow follows the HIPS sideways (flat on the ground, never rotated), height still comes from the root
-                local rp = root.Position
-                local hipPart = marioModel:FindFirstChild("M64_Butt")
-                local hp = hipPart and hipPart.Position or rp
-                local res = workspace:Raycast(Vector3.new(hp.X, rp.Y + 1, hp.Z), Vector3.new(0, -400, 0), shadowRay)
+                local origin = root.Position
+                local res = workspace:Raycast(origin, Vector3.new(0, -400, 0), shadowRay)
                 if not res then hideShadow() return end
-                local h = math.max(rp.Y - feetOffset() - res.Position.Y, 0)
+                local h = math.max(origin.Y - feetOffset() - res.Position.Y, 0)
                 local k = math.clamp(1 - h / 80, 0.35, 1)
                 local vis = math.clamp(1 - h / 200, 0.2, 1)
                 local d = CFG.ModelHeight * 0.85 * k
@@ -5321,7 +5126,7 @@ local function main(character, mode)
                 if not asset then return end
                 local sound = Instance.new("Sound")
                 sound.SoundId = asset
-                sound.PlaybackSpeed = playback * _M.voicePitch(name) * (0.97 + math.random() * 0.06)
+                sound.PlaybackSpeed = playback * (0.97 + math.random() * 0.06)
                 sound.Volume = volume or 1
                 sound.RollOffMaxDistance = 150
                 sound.Parent = root
@@ -6170,15 +5975,12 @@ local function main(character, mode)
                 { "  Battle Shake", function() return (shared.M64Battle and shared.M64Battle.shake or 1) > 0 end, function() local B = shared.M64Battle; if B then local v = { 0, 0.5, 1, 1.6 }; local i = 1; for k, x in ipairs(v) do if x == B.shake then i = k end end; B.shake = v[i % #v + 1] end end, function() return opts.battleMusic ~= false end, function() local B = shared.M64Battle; local sh = B and B.shake or 1; return "Beat screen shake:  " .. (sh == 0 and "off" or (sh < 1 and "low" or (sh > 1 and "high" or "normal"))) .. "  (tap = change)" end, _M.MUS.blue },
                 { "Dev Screen", function() return opts.dev == true end, function() opts.dev = not (opts.dev == true) end },
                 { "N64 Controller Display", function() return opts.padHud ~= false end, function() opts.padHud = not (opts.padHud ~= false) end },
-                { "Ragdoll (tap, or type /ragdoll)", function() return _M.RAG ~= nil and _M.RAG.on end, function() if _M.RAG then _M.RAG.toggle() end end, nil, function() return (_M.RAG ~= nil and _M.RAG.on) and "Ragdoll:  ON  (tap = get up)" or "Ragdoll  (tap, or /ragdoll)" end },
-                { "Auto Ragdoll With The Game", function() return opts.ragdollGame ~= false end, function() opts.ragdollGame = not (opts.ragdollGame ~= false) end },
                 { "Unfreeze Mario (Anti-Lock)", function() return opts.antiLock ~= false end, function() opts.antiLock = not (opts.antiLock ~= false) end, nil, function() local a = shared.M64AntiLock; local on = opts.antiLock ~= false; return "Anti-Lock " .. (on and "ON" or "OFF") .. ":  frees Mario when a game locks him (anchored, frozen, controls off)" .. ((a and a.fixes > 0) and ("  ::  fixed " .. a.fixes .. "x, last: " .. a.last) or "") end },
                 { "Same Jump Gravity (every game)", function() return opts.fixedGravity ~= false end, function() opts.fixedGravity = not (opts.fixedGravity ~= false) end, nil, function() return (opts.fixedGravity ~= false) and "Jumps reach the same height in every game, whatever its gravity" or "Jumps follow the game's own gravity (stronger gravity = lower jumps)" end },
                 { "Variable Jump Height", function() return opts.varJump == true end, function() opts.varJump = not (opts.varJump == true) end, nil, function() return (opts.varJump == true) and "Letting go of jump early cuts a single / double jump short" or "Off: every jump goes full height, even a quick tap (SM64 style)" end },
                 { "Room Echo (SM64)", function() return opts.roomEcho ~= false end, function() opts.roomEcho = not (opts.roomEcho ~= false) end, nil, function() local r = shared.M64Room; if opts.roomEcho == false then return "Room Echo OFF: no echo anywhere" end; return "Room Echo ON: Mario's sounds echo like the room he is in (now: " .. ((r and r.label) or "...") .. ")" end },
                 { "Room Echo: Whole Game Audio", function() return opts.roomEchoAll == true end, function() opts.roomEchoAll = not (opts.roomEchoAll == true) end, nil, function() return (opts.roomEchoAll == true) and "The game's own sounds echo too (Roblox ambient reverb follows the room)" or "Off: only Mario's sounds echo" end },
                 { "Camera Follows Mario", function() return opts.camFollow ~= false end, function() opts.camFollow = not (opts.camFollow ~= false) end },
-                { "Auto-Fix Stuck Camera", function() return opts.camAutoFix ~= false end, function() opts.camAutoFix = not (opts.camAutoFix ~= false) end },
                 { "B = Game Attack Button", function() return opts.gameAtk ~= false end, function() opts.gameAtk = not (opts.gameAtk ~= false) end, nil, function() local f = _M.gameAct and _M.gameAct.found; if opts.gameAtk == false then return "Game attack button:  off" end return "B presses the game's own attack:  " .. (f and f.label or "none found yet") end },
                 { "Game UI Over Controls", function() return opts.gameUiOver ~= false end, function() opts.gameUiOver = not (opts.gameUiOver ~= false); pcall(function() local g = player.PlayerGui:FindFirstChild("MarioControls"); if g then g.DisplayOrder = (opts.gameUiOver ~= false) and -50 or 0 end end) end, nil, function() return (opts.gameUiOver ~= false) and "Game buttons cover the SM64 touch buttons (A and Z stay on top)" or "SM64 touch buttons on top of the game's UI" end },
                 { "Touch Style (New / Old)", function() return opts.touchStyle ~= "classic" end, function() opts.touchStyle = (opts.touchStyle ~= "classic") and "classic" or "n64"; if _M.applyTouchStyle then task.spawn(_M.applyTouchStyle) end end, nil, function() return (opts.touchStyle ~= "classic") and "Touch buttons:  NEW (N64 layout)  - tap to go to the OLD round buttons" or "Touch buttons:  OLD (classic round buttons)  - tap to go back to the NEW N64 layout" end },
@@ -6234,17 +6036,14 @@ local function main(character, mode)
                             pg2.Parent = PlayerGui
                             fxTrack({ Disconnect = function() pcall(function() pg2:Destroy() end) end })
                             local vsz = workspace.CurrentCamera.ViewportSize
-                            local sc = math.clamp(vsz.Y / 400, 0.7, 1.3) * 0.55 -- smaller than before (it was ~2x too big and covered the game HUD)
+                            local sc = math.clamp(vsz.Y / 400, 0.8, 1.8) * 0.9
                             local W, H = 103 * sc, 95 * sc
                             local meter = Instance.new("ImageLabel")
                             meter.AnchorPoint = Vector2.new(1, 0)
                             meter.Size = UDim2.fromOffset(W, H)
                             meter.BackgroundTransparency = 1
                             meter.ImageContent = ringC
-                            local basePos = shared.M64MeterPos or UDim2.new(1, -12, 0, 8)
-                            local function hiddenPos() return UDim2.new(basePos.X.Scale, basePos.X.Offset, 0, -H - 10) end
-                            meter.Position = hiddenPos()
-                            meter.Active = true
+                            meter.Position = UDim2.new(1, -12, 0, -H - 10)
                             meter.Parent = pg2
                             local pie = Instance.new("ImageLabel")
                             pie.BackgroundTransparency = 1
@@ -6257,31 +6056,7 @@ local function main(character, mode)
                             local function slide(on)
                                 if shown == on then return end
                                 shown = on
-                                TS:Create(meter, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { Position = on and basePos or hiddenPos() }):Play()
-                            end
-                            -- drag the meter (mouse or finger) to put it where it does not cover anything; the spot is remembered
-                            do
-                                local UIS2 = game:GetService("UserInputService")
-                                local dragging, dStart, dPos = false, nil, nil
-                                local function isPtr(i) return i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch end
-                                meter.InputBegan:Connect(function(i)
-                                    if shown and isPtr(i) then
-                                        dragging, dStart, dPos = true, i.Position, meter.Position
-                                        i.Changed:Connect(function()
-                                            if i.UserInputState == Enum.UserInputState.End then
-                                                dragging = false
-                                                basePos = meter.Position; shared.M64MeterPos = basePos
-                                            end
-                                        end)
-                                    end
-                                end)
-                                local cn = UIS2.InputChanged:Connect(function(i)
-                                    if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
-                                        local d = i.Position - dStart
-                                        meter.Position = UDim2.new(dPos.X.Scale, dPos.X.Offset + d.X, dPos.Y.Scale, dPos.Y.Offset + d.Y)
-                                    end
-                                end)
-                                fxTrack(cn)
+                                TS:Create(meter, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { Position = on and UDim2.new(1, -12, 0, 8) or UDim2.new(1, -12, 0, -H - 10) }):Play()
                             end
                             task.spawn(function()
                                     while pg2.Parent do
@@ -7283,8 +7058,109 @@ local function main(character, mode)
                 end
                 -- frames: 1 open, 2 half, 3 closed, 4 X, 5 side-eye, 6 smirk, 7 angry
                 local shown = 0
+                -- STANT'S FACE LAYER. His eyes / brows / mouth used to be pasted into the head texture as 91x82 opaque frames, YELLOW BACKGROUND INCLUDED,
+                -- which left a yellow patch around the face art. Now the face is drawn on its own layer that uses the same kind of material the SMGyan
+                -- skin's face uses: a SurfaceAppearance with AlphaMode.Transparency. Only the face art pixels are drawn, the yellow is see-through.
+                -- If Roblox refuses (no EditableImage / SurfaceAppearance) it quietly falls back to the old way.  Off switch: shared.M64Opts.stantFaceLayer = false
+                local ov = nil
+                if PK.stant and (shared.M64Opts or {}).stantFaceLayer ~= false then
+                    local okOv, errOv = pcall(function()
+                        local headP = piece["Head"]
+                        local hp = _M.meshByBone and _M.meshByBone["Head"]
+                        if not (headP and headP:IsA("MeshPart") and hp) then error("no head mesh") end
+                        local rd, wr = buffer.readu8, buffer.writeu8
+                        local yr, yg, yb = tonumber(E.pal:sub(1, 2), 16), tonumber(E.pal:sub(3, 4), 16), tonumber(E.pal:sub(5, 6), 16)
+                        local n = E.w * E.h
+                        local tb = {} -- the eye frames again, but with the yellow background made see-through (alpha 0)
+                        for f = 1, 7 do
+                            local s = bufs[f]
+                            if s then
+                                local t = buffer.create(n * 4)
+                                for px = 0, n - 1 do
+                                    local o = px * 4
+                                    local r, g, b = rd(s, o), rd(s, o + 1), rd(s, o + 2)
+                                    wr(t, o, r); wr(t, o + 1, g); wr(t, o + 2, b)
+                                    wr(t, o + 3, (r == yr and g == yg and b == yb) and 0 or rd(s, o + 3))
+                                end
+                                tb[f] = t
+                            end
+                        end
+                        local plain = buffer.create(n * 4) -- the same rectangle in plain skin yellow: what the head texture shows under the face layer
+                        for px = 0, n - 1 do
+                            local o = px * 4
+                            wr(plain, o, yr); wr(plain, o + 1, yg); wr(plain, o + 2, yb); wr(plain, o + 3, 255)
+                        end
+
+                        local mp = _M.buildMesh(hp) -- a second copy of the head mesh (same shape, same UVs) that carries only the face
+                        pcall(function() mp.TextureContent = Content.none end)
+                        mp.Name = "M64_StantFace"
+                        mp.Size = headP.Size * 1.006 -- a hair bigger than the head, so the two never flicker against each other
+                        mp.Anchored, mp.CanCollide, mp.CanQuery, mp.CanTouch, mp.Massless = false, false, false, false, true
+                        pcall(function() mp.CastShadow = false end)
+                        mp.CFrame = headP.CFrame
+                        local sa = Instance.new("SurfaceAppearance")
+                        sa.Name = "M64StantFaceSA"
+                        sa.AlphaMode = Enum.AlphaMode.Transparency
+                        local w = Instance.new("Weld")
+                        w.Part0 = headP; w.Part1 = mp; w.C0 = CFrame.new(); w.Parent = mp
+
+                        local O = { part = mp, sa = sa, base = false, K = 1, cache = {}, cur = 0 }
+                        local function rebuild() -- (also runs again when the 3-point filter is switched and the head texture is rebuilt)
+                            O.K = CFG.SM64Filter and 4 or 1
+                            local N = _M.TEX_N * O.K
+                            O.img = _M.AssetService:CreateEditableImage({ Size = Vector2.new(N, N) })
+                            O.img:WritePixelsBuffer(Vector2.zero, Vector2.new(N, N), buffer.create(N * N * 4)) -- start fully see-through
+                            _M.uiKeep[#_M.uiKeep + 1] = O.img
+                            O.cache = {}
+                            sa.ColorMapContent = Content.fromObject(O.img)
+                            O.cur = 0
+                        end
+                        function O.draw(i)
+                            local b = tb[i]
+                            if not b then return end
+                            if O.K > 1 then
+                                local hb = O.cache[b]
+                                if not hb then hb = _M.filter3(b, E.w, E.h, O.K, PK.luigi); O.cache[b] = hb end
+                                O.img:WritePixelsBuffer(Vector2.new(E.x0 * O.K, E.y0 * O.K), Vector2.new(E.w * O.K, E.h * O.K), hb)
+                            else
+                                O.img:WritePixelsBuffer(Vector2.new(E.x0, E.y0), Vector2.new(E.w, E.h), b)
+                            end
+                            O.cur = i
+                        end
+                        function O.sync() -- follows the head's visibility (vanish cap, blinking, ...)
+                            if O.part.Parent and headP.Parent then O.part.Transparency = headP.Transparency end
+                        end
+                        function O.check() -- the head texture was rebuilt: take the face out of it again and redraw the layer
+                            if CFG.TexImg ~= O.base then
+                                local first = (O.base == false)
+                                O.base = CFG.TexImg
+                                rebuild()
+                                O.draw(shown > 0 and shown or 1)
+                                pcall(function() CFG.TexImg:WritePixelsBuffer(Vector2.new(E.x0, E.y0), Vector2.new(E.w, E.h), plain) end)
+                                return not first
+                            end
+                            return false
+                        end
+                        O.check() -- first draw: the face layer first, THEN the old face is taken out of the texture (no flash without a face)
+                        sa.Parent = mp
+                        mp.Parent = marioModel
+                        ov = O
+                    end)
+                    if not okOv then
+                        warn("[Mario64] Stant face layer failed, using the old face: " .. tostring(errOv))
+                    end
+                end
                 local function show(i)
-                    if shown == i or not bufs[i] then return end
+                    if not bufs[i] then return end
+                    if ov then
+                        ov.sync()
+                        if ov.check() then shown = 0 end
+                        if shown == i then return end
+                        shown = i
+                        pcall(ov.draw, i)
+                        return
+                    end
+                    if shown == i then return end
                     shown = i
                     pcall(function() CFG.TexImg:WritePixelsBuffer(Vector2.new(E.x0, E.y0), Vector2.new(E.w, E.h), bufs[i]) end)
                 end
@@ -7470,7 +7346,7 @@ local function main(character, mode)
     do (function()
                 local AL = shared.M64AntiLock
                 if not AL then AL = { fixes = 0, last = "" }; shared.M64AntiLock = AL end
-                local function alEnabled() return (shared.M64Opts or {}).antiLock ~= false and not PK.killed and not PK.puppet and not (_M.RAG and _M.RAG.on) end
+                local function alEnabled() return (shared.M64Opts or {}).antiLock ~= false and not PK.killed and not PK.puppet end
                 local K = Enum.KeyCode
                 -- direct input (used by getMove when the game's controls return nothing)
                 _M.directMove = function()
@@ -7808,42 +7684,11 @@ local function main(character, mode)
                 end
                 -- camera: it is the normal camera, but it never leaves Mario (also after he dies)
                 if not PK.puppet then
-                    -- auto-fix: if the camera stays broken for 1.5 s (stuck on Scriptable, wrong subject, far away, or inside a wall) it is reset
-                    _M.camFix = { acc = 0, bad = 0, fixed = 0, params = OverlapParams.new() } -- (kept in _M: main() is close to Luau's local-variable limit)
-                    _M.camFix.params.FilterType = Enum.RaycastFilterType.Exclude
-                    track(RunService.RenderStepped:Connect(function(dt)
-                                local CF = _M.camFix
+                    track(RunService.RenderStepped:Connect(function()
                                 if PK.killed or opts.camFollow == false then return end
                                 local cam = workspace.CurrentCamera
                                 if cam and humanoid.Parent and cam.CameraType ~= Enum.CameraType.Scriptable and cam.CameraSubject ~= humanoid then
                                     cam.CameraSubject = humanoid
-                                end
-                                CF.acc += dt
-                                if CF.acc < 0.25 then return end
-                                local step = CF.acc
-                                CF.acc = 0
-                                if not cam or opts.camAutoFix == false or humanoid.Health <= 0 or not humanoid.Parent or not root or not root.Parent or _M.lookOn then
-                                    CF.bad = 0 -- (the look-around camera and the death camera are meant to be Scriptable)
-                                    return
-                                end
-                                local bad, hard = false, false
-                                if cam.CameraType == Enum.CameraType.Scriptable then bad = true end
-                                if (cam.CFrame.Position - root.Position).Magnitude > 120 then bad, hard = true, true end
-                                CF.params.FilterDescendantsInstances = { root.Parent }
-                                for _, p in ipairs(workspace:GetPartBoundsInRadius(cam.CFrame.Position, 0.4, CF.params)) do
-                                    if p.CanCollide and p.Transparency < 0.9 then bad, hard = true, true break end
-                                end
-                                if not bad then CF.bad = 0 return end
-                                CF.bad += step
-                                if CF.bad >= 1.5 and os.clock() - CF.fixed > 1 then
-                                    CF.bad = 0
-                                    CF.fixed = os.clock()
-                                    cam.CameraType = Enum.CameraType.Custom
-                                    cam.CameraSubject = humanoid
-                                    if cam.FieldOfView < 20 or cam.FieldOfView > 100 then cam.FieldOfView = 70 end
-                                    if hard then
-                                        cam.CFrame = CFrame.lookAt(root.Position - root.CFrame.LookVector * 14 + Vector3.new(0, 7, 0), root.Position)
-                                    end
                                 end
                     end))
                 end
@@ -8254,6 +8099,7 @@ local function main(character, mode)
         deathFov = fov0
         local t0 = os.clock()
         cam.CameraType = Enum.CameraType.Scriptable
+        shared.M64CamByScript = true
         deathCam = RunService.RenderStepped:Connect(function()
                 local c = workspace.CurrentCamera
                 if not c then return end
@@ -8286,6 +8132,85 @@ local function main(character, mode)
             end)
         end
     end
+    -- AUTO CAMERA FIX: if the camera gets stuck, it is handed back to the normal camera by itself.
+    -- Stuck = a Scriptable camera that THIS script took (look camera / death camera) and that has been frozen for 1.5 s with nobody driving it,
+    -- a broken (NaN) camera position, or a camera that lost its subject. Cameras that the GAME controls are left alone.
+    -- Turn it off with  shared.M64Opts.camFix = false  . You can also call  shared.M64FixCamera()  yourself at any time.
+    if not PK.puppet then
+        local still, lastPos, lastLook, acc = nil, nil, nil, 0
+        local function fixCamera()
+            pcall(function()
+                local cam = workspace.CurrentCamera
+                if not cam then return end
+                if deathCam then deathCam:Disconnect(); deathCam = nil end
+                if _M.lookCamConn then _M.lookCamConn:Disconnect(); _M.lookCamConn = nil end
+                _M.lookOn = false
+                local ch = player.Character
+                local h = ch and ch:FindFirstChildOfClass("Humanoid")
+                cam.CameraType = Enum.CameraType.Custom
+                if h then cam.CameraSubject = h end
+                if deathFov then cam.FieldOfView = deathFov end
+                if cam.CFrame.Position ~= cam.CFrame.Position then -- NaN position: put the camera behind Mario
+                    local r = ch and ch:FindFirstChild("HumanoidRootPart")
+                    if r then cam.CFrame = CFrame.lookAt(r.Position + Vector3.new(0, 6, 14), r.Position) end
+                end
+                shared.M64CamByScript = false
+            end)
+            still = nil
+        end
+        local fixConn
+        fixConn = RunService.Heartbeat:Connect(function(dt)
+            acc += dt
+            if acc < 0.25 then return end
+            acc = 0
+            if PK.killed then fixConn:Disconnect() return end
+            local o = shared.M64Opts or {}
+            if o.camFix == false or o.camFollow == false then return end
+            local cam = workspace.CurrentCamera
+            if not cam then return end
+            local now = os.clock()
+            local pos, look = cam.CFrame.Position, cam.CFrame.LookVector
+            if pos ~= pos or look ~= look then fixCamera() return end -- NaN camera
+            local ch = player.Character
+            local h = ch and ch:FindFirstChildOfClass("Humanoid")
+            if cam.CameraType ~= Enum.CameraType.Scriptable then
+                shared.M64CamByScript = false
+                still = nil
+                -- the camera lost its subject: point it at Mario again
+                local s = cam.CameraSubject
+                if h and h.Parent and (s == nil or not s:IsDescendantOf(workspace)) then cam.CameraSubject = h end
+            elseif shared.M64CamByScript and not (_M.lookOn or deathCam ~= nil) and h and h.Health > 0 then
+                -- the script took the camera, nobody drives it any more: if it stays frozen it is stuck
+                local moved = lastPos == nil or (pos - lastPos).Magnitude > 0.02 or (look - lastLook).Magnitude > 0.002
+                if moved then still = nil else still = still or now end
+                if still and now - still >= 1.5 then fixCamera() end
+            else
+                still = nil
+            end
+            lastPos, lastLook = pos, look
+        end)
+        shared.M64FixCamera = fixCamera
+        local prevKill = PK.fxKill
+        PK.fxKill = function() -- Mario removed / replaced: stop the look camera for good (it used to keep running) and give the camera back
+            if prevKill then pcall(prevKill) end
+            pcall(function() fixConn:Disconnect() end)
+            pcall(function()
+                if _M.lookCamConn then _M.lookCamConn:Disconnect(); _M.lookCamConn = nil end
+                if _M.lookOn then
+                    _M.lookOn = false
+                    local cam = workspace.CurrentCamera
+                    local ch = player.Character
+                    local h = ch and ch:FindFirstChildOfClass("Humanoid")
+                    if cam then
+                        cam.CameraType = _M.prevCamType or Enum.CameraType.Custom
+                        if h then cam.CameraSubject = h end
+                    end
+                end
+            end)
+            if shared.M64FixCamera == fixCamera then shared.M64FixCamera = nil end
+        end
+    end
+
     humanoid.Died:Connect(function()
             if PK.killed then return end
             if carried then releaseCarried(Vector3.zero) end
@@ -8354,7 +8279,6 @@ local function main(character, mode)
         pcall(function() if poseConn then poseConn:Disconnect() end end)
         pcall(function() if stepConn then stepConn:Disconnect() end end)
         pcall(function() if PK.fxKill then PK.fxKill() end end)
-        pcall(function() if _M.RAG and _M.RAG.cleanup then _M.RAG.cleanup() end end)
         pcall(function() marioModel:Destroy() end)
         pcall(function() local t = character:FindFirstChild("Mario64Active"); if t then t:Destroy() end end)
         for d, t in pairs(PK.origT) do
@@ -8466,7 +8390,7 @@ local function main(character, mode)
                 sound.RollOffMinDistance = 7
                 sound.RollOffMaxDistance = 150
                 sound.RollOffMode = Enum.RollOffMode.Inverse
-                sound.PlaybackSpeed = playbackSpeed * _M.voicePitch(name)
+                sound.PlaybackSpeed = playbackSpeed
                 sound.Parent = root
                 sound:Play()
                 Debris:AddItem(sound, 5)
@@ -8606,9 +8530,7 @@ local function main(character, mode)
                     return end
                 if os.clock()>nextGroundFilter then nextGroundFilter = os.clock()+1
                     refreshGroundFilter() end
-                local hipPart = marioModel:FindFirstChild("M64_Butt") -- follow the hips sideways, flat on the ground
-                local hp = hipPart and hipPart.Position or root.Position
-                local result = workspace:Raycast(Vector3.new(hp.X, root.Position.Y+1, hp.Z), Vector3.new(0, -400, 0), groundRay)
+                local result = workspace:Raycast(root.Position+Vector3.new(0, 1, 0), Vector3.new(0, -400, 0), groundRay)
                 if not result then shadowImage.ImageTransparency = 1
                     return end
                 if result.Instance and result.Instance:IsA("BasePart") then
@@ -9894,7 +9816,7 @@ do
     -- It only shows messages Roblox has already filtered and delivered to you. Nothing is sent anywhere by this script.
     Net.chat = {
         enabled = true,
-        font = Enum.Font.PatrickHand, textSize = 20, maxWidth = 260,
+        font = Enum.Font.Garamond, textSize = 20, maxWidth = 240,
         minTime = 3, maxTime = 8, maxChars = 120,  -- seconds a bubble stays (longer messages stay longer), and the longest message shown
         hideRobloxBubbles = false,                 -- true = turn off Roblox's own bubbles on YOUR screen so you never see two bubbles
         button = true,                             -- the 💬 button (left edge of the screen); false = hide it
@@ -9905,8 +9827,7 @@ do
             "Wahoo!", "Let's-a go!", "Mamma mia!", "Hello!", "Thank you!", "Nice one!", "Good game!", "Follow me!", "Help!", "Yes!",
             "No!", "Okey-dokey!", "Here we go!", "Watch out!", "Oh no...", "Haha!", "I'm ready!", "Wait for me!", "Let's fight!", "Yahoo!",
         },
-        bubbles = {},
-        stacks = {},
+        bubbles = {}, history = {}, renderToken = {},
     }
     do
         local TextService = game:GetService("TextService")
@@ -9923,13 +9844,90 @@ do
 
         function chat.clear()
             for _, g in pairs(chat.bubbles) do pcall(function() g:Destroy() end) end
-            chat.bubbles = {}
-            chat.stacks = {}
+            chat.bubbles = {}; chat.history = {}; chat.renderToken = {}
             if chat.ui then pcall(function() chat.ui:Destroy() end); chat.ui = nil end
             if bubbleCfgWasEnabled ~= nil then
                 pcall(function() TextChatService.BubbleChatConfiguration.Enabled = bubbleCfgWasEnabled end)
                 bubbleCfgWasEnabled = nil
             end
+        end
+
+        local MAX_STACK = 3 -- older messages stay stacked above the newest one, like in the original bubble chat
+
+        function chat.render(player)
+            local h = chat.history[player]
+            local old = chat.bubbles[player]
+            if old then pcall(function() old:Destroy() end); chat.bubbles[player] = nil end
+            if not h then return end
+            local now = os.clock()
+            for i = #h, 1, -1 do if h[i].expire <= now then table.remove(h, i) end end
+            if #h == 0 then chat.history[player] = nil return end
+            local char = player.Character
+            local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head"))
+            if not root then chat.history[player] = nil return end
+            local okExt, ext = pcall(function() return char:GetExtentsSize() end)
+            local off = math.clamp((okExt and ext.Y or 5) * 0.5 + 0.8, 2, 14) -- just above the head, also for a big / small Mario
+
+            local O, PADX, PADY, GAP = 2, 10, 5, 4 -- outline thickness, text padding, gap between stacked bubbles
+            local items, hs, maxW = {}, 0, 0
+            for i, e in ipairs(h) do
+                local sz = TextService:GetTextSize(e.text, chat.textSize, chat.font, Vector2.new(chat.maxWidth, 10000))
+                local bw, bh = math.max(math.ceil(sz.X) + PADX * 2, 30), math.ceil(sz.Y) + PADY * 2
+                local ch = bh + O * 2 + (i == #h and 8 or 0) -- the newest bubble also gets the tail
+                items[i] = {text = e.text, bw = bw, bh = bh, ch = ch}
+                hs = hs + ch + (i > 1 and GAP or 0)
+                maxW = math.max(maxW, bw + O * 2)
+            end
+
+            -- the gui is twice as tall as the stack and the stack sits in its top half, so the TAIL TIP is exactly at the anchor point
+            local g = Instance.new("BillboardGui")
+            g.Name = "M64ChatBubble"; g.Adornee = root; g.Size = UDim2.fromOffset(maxW + 4, hs * 2)
+            g.StudsOffset = Vector3.new(0, off, 0); g.AlwaysOnTop = true; g.MaxDistance = 160
+            g.LightInfluence = 0; g.ResetOnSpawn = false
+
+            local black, white = Color3.new(0, 0, 0), Color3.new(1, 1, 1)
+            local function rect(parent, x, y, w, hgt, color, z, radius, anchorX)
+                local f = Instance.new("Frame")
+                f.AnchorPoint = Vector2.new(anchorX or 0, 0); f.Position = UDim2.fromOffset(x, y); f.Size = UDim2.fromOffset(w, hgt)
+                f.BackgroundColor3 = color; f.BorderSizePixel = 0; f.ZIndex = z
+                if radius then local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, radius); c.Parent = f end
+                f.Parent = parent
+                return f
+            end
+            local y = 0
+            for i, it in ipairs(items) do
+                local cw = it.bw + O * 2
+                local holder = Instance.new("Frame")
+                holder.BackgroundTransparency = 1; holder.AnchorPoint = Vector2.new(0.5, 0)
+                holder.Position = UDim2.new(0.5, 0, 0, y); holder.Size = UDim2.fromOffset(cw, it.ch); holder.Parent = g
+                rect(holder, 0, 0, cw, it.bh + O * 2, black, 1, 10)         -- black outline
+                local inner = rect(holder, O, O, it.bw, it.bh, white, 2, 8) -- white bubble
+                local t = Instance.new("TextLabel")
+                t.BackgroundTransparency = 1; t.Position = UDim2.fromOffset(PADX, PADY); t.Size = UDim2.fromOffset(it.bw - PADX * 2, it.bh - PADY * 2)
+                t.Font = chat.font; t.TextSize = chat.textSize; t.TextColor3 = black; t.TextWrapped = true; t.RichText = false
+                t.Text = it.text; t.ZIndex = 3; t.Parent = inner
+                if i == #items then -- pointed tail, drawn in 2px steps (16, 12, 8, 4 wide) with the outline around it
+                    local cx, ty = cw / 2, it.bh + O
+                    for s = 0, 3 do
+                        local w = 16 - 4 * s
+                        rect(holder, cx, ty + 2 * s, w + 4, 2, black, 3, nil, 0.5)
+                        rect(holder, cx, ty + 2 * s, w, 2, white, 4, nil, 0.5)
+                    end
+                    rect(holder, cx, ty + 8, 4, 2, black, 3, nil, 0.5)
+                end
+                y = y + it.ch + GAP
+            end
+            g.Parent = root
+            chat.bubbles[player] = g
+
+            -- when the oldest message runs out, draw the stack again without it
+            local nextExp = math.huge
+            for _, e in ipairs(h) do nextExp = math.min(nextExp, e.expire) end
+            chat.renderToken[player] = (chat.renderToken[player] or 0) + 1
+            local token = chat.renderToken[player]
+            task.delay(math.max(0.05, nextExp - now), function()
+                if chat.renderToken[player] == token then chat.render(player) end
+            end)
         end
 
         function chat.show(player, text, force)
@@ -9944,87 +9942,11 @@ do
             last[player] = {text = text, t = now}
             local n = utf8.len(text)
             if n and n > chat.maxChars then text = text:sub(1, utf8.offset(text, chat.maxChars) - 1) .. "..." end
-
-            local char = player.Character
-            local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head"))
-            if not root then return end
-            local okExt, ext = pcall(function() return char:GetExtentsSize() end)
-            local off = math.clamp((okExt and ext.Y or 5) * 0.5 + 0.8, 2, 14) -- just above the head, also for a big / small Mario
-            local TAIL = 8
-            local white, edge = Color3.new(1, 1, 1), Color3.fromRGB(55, 55, 62)
-            local sz = TextService:GetTextSize(text, chat.textSize, chat.font, Vector2.new(chat.maxWidth, 10000))
-            local bw, bh = math.ceil(sz.X) + 26, math.ceil(sz.Y) + 14
-
-            -- one invisible host per speaker; the bubbles are stacked inside it, newest at the bottom (tail tip = anchor point)
-            chat.stacks = chat.stacks or {}
-            local st = chat.stacks[player]
-            if not st or not st.gui.Parent or st.gui.Adornee ~= root then
-                if st then pcall(function() st.gui:Destroy() end) end
-                local g = Instance.new("BillboardGui")
-                g.Name = "M64ChatBubble"; g.Adornee = root; g.Size = UDim2.fromOffset(chat.maxWidth + 40, 360)
-                g.StudsOffset = Vector3.new(0, off, 0); g.ExtentsOffset = Vector3.new(0, 0.5, 0); g.SizeOffset = Vector2.new(0, 0.5) -- SizeOffset: bottom of the frame (= tail tip) sits on the anchor, above the head
-                g.AlwaysOnTop = true; g.MaxDistance = 160; g.LightInfluence = 0; g.ResetOnSpawn = false
-                local lf = Instance.new("Frame"); lf.BackgroundTransparency = 1; lf.Size = UDim2.fromScale(1, 1); lf.Parent = g
-                local ly = Instance.new("UIListLayout")
-                ly.SortOrder = Enum.SortOrder.LayoutOrder; ly.VerticalAlignment = Enum.VerticalAlignment.Bottom
-                ly.HorizontalAlignment = Enum.HorizontalAlignment.Center; ly.Padding = UDim.new(0, 6); ly.Parent = lf
-                g.Parent = root
-                st = {gui = g, list = lf, items = {}, tails = {}, n = 0}
-                chat.stacks[player] = st
-                chat.bubbles[player] = g
-            end
-            st.n += 1
-
-            local item = Instance.new("Frame")
-            item.BackgroundTransparency = 1; item.Size = UDim2.fromOffset(bw, bh + TAIL); item.LayoutOrder = st.n
-            local function diamond(side, color, z)
-                local d = Instance.new("Frame")
-                d.AnchorPoint = Vector2.new(0.5, 0.5); d.Position = UDim2.new(0.5, 0, 0, bh)
-                d.Size = UDim2.fromOffset(side, side); d.Rotation = 45; d.BackgroundColor3 = color; d.BorderSizePixel = 0; d.ZIndex = z
-                d.Parent = item
-                return d
-            end
-            local tailBack = diamond(TAIL * 1.45, edge, 1) -- grey one behind = the tail outline
-            local body = Instance.new("Frame")
-            body.Size = UDim2.fromOffset(bw, bh); body.BackgroundColor3 = white; body.BorderSizePixel = 0; body.ZIndex = 2
-            local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, 12); corner.Parent = body
-            local stroke = Instance.new("UIStroke"); stroke.Thickness = 2; stroke.Color = edge; stroke.Parent = body
-            body.Parent = item
-            local tailFront = diamond(TAIL * 1.2, white, 3) -- white one on top = the tail fill, also hides the outline where it joins
-            local t = Instance.new("TextLabel")
-            t.BackgroundTransparency = 1; t.Size = UDim2.fromScale(1, 1); t.ZIndex = 4
-            t.Font = chat.font; t.TextSize = chat.textSize; t.TextColor3 = Color3.fromRGB(32, 32, 38)
-            t.TextWrapped = true; t.RichText = false; t.Text = text; t.Parent = body
-            local sc = Instance.new("UIScale"); sc.Scale = 0.6; sc.Parent = item
-            pcall(function()
-                game:GetService("TweenService"):Create(sc, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
-            end)
-
-            local function refreshTails()
-                for i, it in ipairs(st.items) do
-                    local tl = st.tails[it]
-                    if tl then tl[1].Visible = (i == #st.items); tl[2].Visible = (i == #st.items) end
-                end
-            end
-            local function drop(it)
-                local idx = table.find(st.items, it)
-                if idx then table.remove(st.items, idx) end
-                st.tails[it] = nil
-                pcall(function() it:Destroy() end)
-                if #st.items == 0 then
-                    pcall(function() st.gui:Destroy() end)
-                    if chat.stacks[player] == st then chat.stacks[player] = nil end
-                    if chat.bubbles[player] == st.gui then chat.bubbles[player] = nil end
-                else
-                    refreshTails()
-                end
-            end
-            item.Parent = st.list
-            st.items[#st.items + 1] = item
-            st.tails[item] = {tailBack, tailFront}
-            refreshTails()
-            while #st.items > 3 do drop(st.items[1]) end -- at most 3 bubbles per player
-            task.delay(math.clamp(2 + #text * 0.06, chat.minTime, chat.maxTime), function() drop(item) end)
+            local h = chat.history[player]
+            if not h then h = {}; chat.history[player] = h end
+            h[#h + 1] = {text = text, expire = now + math.clamp(2 + #text * 0.06, chat.minTime, chat.maxTime)}
+            while #h > MAX_STACK do table.remove(h, 1) end
+            chat.render(player)
         end
 
         local function fromUserId(uid, text)
@@ -10085,30 +10007,28 @@ do
             Net.sendChat(id)
         end
 
-        -- type your own message: it goes through the normal Roblox chat (Roblox filters it), and the bubble code above shows it
-        -- for everyone who runs this script. If the game has no usable Roblox chat, only you see the bubble.
-        function chat.sendText(text)
-            if not Net.active or typeof(text) ~= "string" then return end
-            text = text:gsub("^%s+", ""):gsub("%s+$", "")
-            if text == "" then return end
-            local n = utf8.len(text)
-            if n and n > chat.maxChars then text = text:sub(1, utf8.offset(text, chat.maxChars) - 1) end
-            local now = os.clock()
-            if now - (chat.lastSay or -10) < 1.2 then return end -- anti-spam
-            chat.lastSay = now
-            local sent = false
-            pcall(function()
+        -- Typing: the text goes through ROBLOX'S OWN chat (so Roblox's filter and your account's chat settings still apply),
+        -- then comes back as a bubble for everyone who has the script. If your account can't chat, the phrase menu below still works.
+        function chat.sendTyped(text)
+            text = tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+            if text == "" then return true end
+            if (utf8.len(text) or 0) > 200 then text = text:sub(1, utf8.offset(text, 200) - 1) end
+            return (pcall(function()
                 if TextChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-                    local chans = TextChatService:FindFirstChild("TextChannels")
-                    local general = chans and chans:FindFirstChild("RBXGeneral")
-                    if general then general:SendAsync(text); sent = true end
+                    local allowed = true
+                    pcall(function() allowed = TextChatService:CanUserChatAsync(localPlayer.UserId) end)
+                    if allowed == false then error("chat not allowed") end
+                    local channels = TextChatService:WaitForChild("TextChannels", 3)
+                    local general = channels and channels:FindFirstChild("RBXGeneral")
+                    if not general then error("no general channel") end
+                    general:SendAsync(text)
                 else
-                    local ev = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
-                    local say = ev and ev:FindFirstChild("SayMessageRequest")
-                    if say then say:FireServer(text, "All"); sent = true end
+                    local events = ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents", 3)
+                    local say = events and events:WaitForChild("SayMessageRequest", 3)
+                    if not say then error("no legacy chat") end
+                    say:FireServer(text, "All")
                 end
-            end)
-            if not sent then chat.show(localPlayer, text, true) end
+            end))
         end
 
         task.spawn(function()
@@ -10131,31 +10051,38 @@ do
                 btn.Parent = gui
 
                 local panel = Instance.new("Frame")
-                panel.Visible = false; panel.Size = UDim2.fromOffset(230, 362)
+                panel.Visible = false; panel.Size = UDim2.fromOffset(250, 380)
                 panel.AnchorPoint = Vector2.new(0, 0.5); panel.Position = UDim2.new(0, 66, 0.5, 0)
                 panel.BackgroundColor3 = Color3.fromRGB(24, 24, 28); panel.BackgroundTransparency = 0.08; panel.BorderSizePixel = 0
                 local pc = Instance.new("UICorner"); pc.CornerRadius = UDim.new(0, 12); pc.Parent = panel
                 local title = Instance.new("TextLabel")
-                title.BackgroundTransparency = 1; title.Size = UDim2.new(1, 0, 0, 30); title.Font = Enum.Font.GothamBold; title.TextSize = 15
-                title.TextColor3 = Color3.new(1, 1, 1); title.Text = "Say something"; title.Parent = panel
+                title.BackgroundTransparency = 1; title.Size = UDim2.new(1, 0, 0, 26); title.Font = Enum.Font.GothamBold; title.TextSize = 15
+                title.TextColor3 = Color3.new(1, 1, 1); title.Text = "SM64 chat"; title.Parent = panel
+
                 local box = Instance.new("TextBox")
-                box.Position = UDim2.fromOffset(8, 32); box.Size = UDim2.new(1, -16, 0, 32)
-                box.BackgroundColor3 = Color3.fromRGB(58, 58, 66); box.BorderSizePixel = 0
-                box.Font = Enum.Font.GothamMedium; box.TextSize = 15; box.TextColor3 = Color3.new(1, 1, 1); box.TextXAlignment = Enum.TextXAlignment.Left
-                box.PlaceholderText = "Type a message + Enter"; box.PlaceholderColor3 = Color3.fromRGB(170, 170, 180)
-                box.Text = ""; box.ClearTextOnFocus = false
-                local bxc = Instance.new("UICorner"); bxc.CornerRadius = UDim.new(0, 8); bxc.Parent = box
-                local bxp = Instance.new("UIPadding"); bxp.PaddingLeft = UDim.new(0, 8); bxp.PaddingRight = UDim.new(0, 8); bxp.Parent = box
-                box.FocusLost:Connect(function(enterPressed)
-                    local msg = box.Text
-                    if enterPressed and msg ~= "" then
-                        box.Text = ""
-                        task.spawn(chat.sendText, msg)
-                    end
-                end)
+                box.Position = UDim2.fromOffset(8, 28); box.Size = UDim2.new(1, -16, 0, 32)
+                box.BackgroundColor3 = Color3.fromRGB(45, 45, 52); box.BorderSizePixel = 0
+                box.Font = Enum.Font.GothamMedium; box.TextSize = 14; box.TextColor3 = Color3.new(1, 1, 1)
+                box.PlaceholderText = "Type a message, press Enter"; box.PlaceholderColor3 = Color3.fromRGB(150, 150, 160)
+                box.Text = ""; box.ClearTextOnFocus = false; box.TextXAlignment = Enum.TextXAlignment.Left
+                local bcorner = Instance.new("UICorner"); bcorner.CornerRadius = UDim.new(0, 8); bcorner.Parent = box
+                local bpad = Instance.new("UIPadding"); bpad.PaddingLeft = UDim.new(0, 8); bpad.PaddingRight = UDim.new(0, 8); bpad.Parent = box
                 box.Parent = panel
+
+                local notice = Instance.new("TextLabel")
+                notice.BackgroundTransparency = 1; notice.Position = UDim2.fromOffset(8, 62); notice.Size = UDim2.new(1, -16, 0, 28)
+                notice.Font = Enum.Font.Gotham; notice.TextSize = 12; notice.TextColor3 = Color3.fromRGB(255, 190, 90)
+                notice.TextWrapped = true; notice.TextXAlignment = Enum.TextXAlignment.Left; notice.Text = ""; notice.Parent = panel
+                local noticeToken = 0
+                local function warnText(msg)
+                    noticeToken += 1
+                    local mine = noticeToken
+                    notice.Text = msg
+                    task.delay(6, function() if noticeToken == mine then notice.Text = "" end end)
+                end
+
                 local list = Instance.new("ScrollingFrame")
-                list.BackgroundTransparency = 1; list.BorderSizePixel = 0; list.Position = UDim2.fromOffset(8, 72); list.Size = UDim2.new(1, -16, 1, -80)
+                list.BackgroundTransparency = 1; list.BorderSizePixel = 0; list.Position = UDim2.fromOffset(8, 94); list.Size = UDim2.new(1, -16, 1, -102)
                 list.ScrollBarThickness = 4; list.CanvasSize = UDim2.new(); list.AutomaticCanvasSize = Enum.AutomaticSize.Y
                 local ll = Instance.new("UIListLayout"); ll.Padding = UDim.new(0, 5); ll.Parent = list
                 for i, phrase in ipairs(chat.PHRASES) do
@@ -10170,10 +10097,30 @@ do
                 panel.Parent = gui
                 gui.Parent = pg
 
-                btn.MouseButton1Click:Connect(function() panel.Visible = not panel.Visible end)
+                box.FocusLost:Connect(function(enterPressed)
+                    if not enterPressed then return end
+                    local text = box.Text
+                    box.Text = ""
+                    if text:match("^%s*$") then return end
+                    task.spawn(function()
+                        if chat.sendTyped(text) then
+                            panel.Visible = false
+                        else
+                            warnText("Roblox chat isn't available for your account here, so typing can't be sent. Pick a phrase below instead.")
+                        end
+                    end)
+                end)
+
+                local function setOpen(open, focus)
+                    panel.Visible = open
+                    if open and focus then -- opened with the key: jump into the type box (a tiny delay so the key itself isn't typed)
+                        task.delay(0.05, function() if panel.Visible then box:CaptureFocus(); box.Text = "" end end)
+                    end
+                end
+                btn.MouseButton1Click:Connect(function() setOpen(not panel.Visible, false) end)
                 Net.connections[#Net.connections + 1] = UserInputService.InputBegan:Connect(function(input, processed)
                     if processed or not chat.key then return end
-                    if input.KeyCode == chat.key then panel.Visible = not panel.Visible end
+                    if input.KeyCode == chat.key then setOpen(not panel.Visible, UserInputService.KeyboardEnabled) end
                 end)
             end)
         end)
