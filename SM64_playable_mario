@@ -1,4 +1,4 @@
-shared.M64Build = "20261126-3" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261126-4" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -1615,6 +1615,8 @@ local function main(character, mode)
     -- SMGyan TORSO: LONGER, not wider. SMG_TORSO_GROW = how much taller the shirt gets (0 = original; the head and shoulders move up with it).
     -- SMG_TORSO_SCALE = extra size around the torso's middle (X height, Y depth, Z width; 1,1,1 = original, so he is NOT fatter).
     _M.SMG_TORSO_GROW = 0.30
+    _M.SMG_ARM_SCALE = 1.15 -- SMGyan arms (upper arm, forearm, hand) a bit bigger; 1 = original
+    _M.SMG_ARM_BONES = { ["Left Arm Color"] = true, ["Right Arm Color"] = true, ["Left Forearm"] = true, ["Right Forearm"] = true, ["Left Hand"] = true, ["Right Hand"] = true }
     _M.SMG_TORSO_SCALE = Vector3.new(1, 1, 1)
     _M.SMG_ARM_SPREAD = 1 -- 1 = shoulders stay where they were
     function _M.buildMesh(p)
@@ -1625,15 +1627,17 @@ local function main(character, mode)
         local vid = {}
         local tsc = (PK.smgyan and p.bone == "Torso") and _M.SMG_TORSO_SCALE or nil
         local tgrow = (PK.smgyan and p.bone == "Torso") and (_M.SMG_TORSO_GROW or 0) or 0
+        local asc = (PK.smgyan and _M.SMG_ARM_BONES[p.bone]) and (_M.SMG_ARM_SCALE or 1) or 1
         for i = 1, nv do
             local vx, vy2, vz = s16(buf, o) / 20000 * S, s16(buf, o + 2) / 20000 * S, s16(buf, o + 4) / 20000 * S
             if tsc then -- scale the torso around its own middle
                 local c = p.c * S
                 vx, vy2, vz = c.X + (vx - c.X) * tsc.X, c.Y + (vy2 - c.Y) * tsc.Y, c.Z + (vz - c.Z) * tsc.Z
             end
-            if tgrow ~= 0 then -- stretch upward from the waist: bottom stays, top moves up
-                local bot = (p.c.X - p.size.X * 0.5) * S
-                vx = bot + (vx - bot) * ((p.size.X + tgrow) / p.size.X)
+            if asc ~= 1 then vx, vy2, vz = vx * asc, vy2 * asc, vz * asc end -- bigger arm pieces (scaled around their own joint)
+            if tgrow ~= 0 then -- only the SHIRT is stretched (waist stays, collar moves up); the neck / collar on top is just lifted, not stretched
+                local bot, xc, dl = (p.c.X - p.size.X * 0.5) * S, 0.37 * S, tgrow * S
+                if vx <= xc then vx = bot + (vx - bot) * ((xc + dl - bot) / (xc - bot)) else vx = vx + dl end
             end
             vid[i] = em:AddVertex(Vector3.new(vx, vy2, vz))
             o += 6
@@ -2271,7 +2275,8 @@ local function main(character, mode)
         for j, n in ipairs(ROT) do
             local v = nodeT[j]
             if n == "Left Arm" or n == "Right Arm" then nodeT[j] = Vector3.new(v.X + grow, v.Y, v.Z * (_M.SMG_ARM_SPREAD or 1)) -- shoulders ride up with the longer torso
-            elseif n == "Head" then nodeT[j] = Vector3.new(v.X + grow, v.Y, v.Z) end -- so does the neck
+            elseif n == "Head" then nodeT[j] = Vector3.new(v.X + grow, v.Y, v.Z) -- so does the neck
+            elseif n == "Left Forearm" or n == "Right Forearm" or n == "Left Hand" or n == "Right Hand" then nodeT[j] = v * (_M.SMG_ARM_SCALE or 1) end -- longer arms: elbows and wrists move out with them
         end
     end
     _M.decoded = {}
