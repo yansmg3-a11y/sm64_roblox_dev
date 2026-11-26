@@ -1,4 +1,4 @@
-shared.M64Build = "20261126-5" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261126-6" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -1614,52 +1614,47 @@ local function main(character, mode)
     CFG.MeshRef = setmetatable({}, { __mode = "k" }) -- MeshPart -> { em, faces } so the metal cap can swap UVs (a table field: no new local, the script is near the 200-local limit)
     -- SMGyan TORSO: LONGER, not wider. SMG_TORSO_GROW = how much taller the shirt gets (0 = original; the head and shoulders move up with it).
     -- SMG_TORSO_SCALE = extra size around the torso's middle (X height, Y depth, Z width; 1,1,1 = original, so he is NOT fatter).
-    _M.SMG_TORSO_GROW = 0.30
-    _M.SMG_ARM_SCALE = 1.15 -- SMGyan arms (upper arm, forearm, hand) a bit bigger; 1 = original
+    _M.SMG_TORSO_GROW = 0.262 -- from your FBX: head + shoulders sit this much higher than the old skeleton
+    _M.SMG_TORSO_HEIGHT = 0.678 -- full blocky torso height (FBX: 155 of 173.6 wide -> 0.678 when 0.76 wide)
+    _M.SMG_ARM_SCALE = 1.13 -- SMGyan arms (upper arm, forearm, hand) a bit bigger; 1 = original
     _M.SMG_ARM_BONES = { ["Left Arm Color"] = true, ["Right Arm Color"] = true, ["Left Forearm"] = true, ["Right Forearm"] = true, ["Left Hand"] = true, ["Right Hand"] = true }
     _M.SMG_TORSO_SCALE = Vector3.new(1, 1, 1)
-    _M.SMG_TORSO_DEPTH = 0.32 -- front-to-back thickness of the blocky torso (the old slab was 0.45)
-    _M.SMG_ARM_SPREAD = 1 -- 1 = shoulders stay where they were
-    -- SMGyan parts are adjusted ONCE here: the torso becomes a full box, the arm pieces grow around their joints
+    _M.SMG_TORSO_DEPTH = 0.454 -- front-to-back thickness of the blocky torso (FBX: 103.8)
+    _M.SMG_ARM_SPREAD = 1.30 -- FBX: the arms hang 0.484 from the middle instead of 0.371 (1 = old place)
+    -- SMGyan parts are adjusted ONCE here: the torso becomes a full box + neck (sizes from the FBX), the arm pieces grow around their joints
     if PK.smgyan and _M.SMG then
         for _, sp in ipairs(_M.SMG.parts) do
             if sp.bone == "Torso" then
-                local bot, top = -0.06, 0.409 + (_M.SMG_TORSO_GROW or 0) - 0.004 -- waist .. just under the head (torso bone space, X = up)
-                sp.block = true
-                sp.c = Vector3.new((bot + top) / 2, sp.c.Y, sp.c.Z)
-                sp.size = Vector3.new(top - bot, _M.SMG_TORSO_DEPTH, 0.76)
+                local bot = -0.06 -- waist (torso bone space, X = up)
+                local neckTop = 0.409 + (_M.SMG_TORSO_GROW or 0) + 0.072 -- a little way up into the head
+                sp.block = { bot = bot, top = bot + _M.SMG_TORSO_HEIGHT, neckBot = bot + 0.5846, neckTop = neckTop }
+                sp.c = Vector3.new((bot + neckTop) / 2, sp.c.Y, sp.c.Z)
+                sp.size = Vector3.new(neckTop - bot, _M.SMG_TORSO_DEPTH, 0.76)
             elseif _M.SMG_ARM_BONES[sp.bone] then
                 local k = _M.SMG_ARM_SCALE or 1
                 sp.c = sp.c * k; sp.size = sp.size * k
             end
         end
     end
-    -- SMGyan FULL BLOCKY TORSO: a real box (front, back, both sides, top with the collar, bottom) mapped onto the torso part of his texture
+    -- SMGyan FULL BLOCKY TORSO (+ neck): real boxes, with the exact texture mapping of the FBX's full torso cube
     function _M.buildBlockTorso(p)
         local N = (_M.SMG and _M.SMG.N) or 189
-        local hx, hy, hz = p.size.X * 0.5 * S, p.size.Y * 0.5 * S, p.size.Z * 0.5 * S
+        local B = p.block
+        local cx = p.c.X
+        local hy, hz = _M.SMG_TORSO_DEPTH * 0.5 * S, 0.76 * 0.5 * S
         local em = _M.AssetService:CreateEditableMesh()
         local function uv(px, py)
             local v = 1 - py / N
             if CFG.FlipV then v = 1 - v end
             return em:AddUV(Vector2.new(px / N, v))
         end
-        local FACES = { -- { normal, { {x, y, z, texture-pixel-x, texture-pixel-y } x4 } }
-            { Vector3.new(0, 1, 0), { { hx, hy, -hz, 30.2, 70.2 }, { hx, hy, hz, 53.8, 70.2 }, { -hx, hy, hz, 53.8, 96.8 }, { -hx, hy, -hz, 30.2, 96.8 } } }, -- front (orange collar)
-            { Vector3.new(0, -1, 0), { { hx, -hy, hz, 0.2, 70.2 }, { hx, -hy, -hz, 23.8, 70.2 }, { -hx, -hy, -hz, 23.8, 96.8 }, { -hx, -hy, hz, 0.2, 96.8 } } }, -- back
-            { Vector3.new(0, 0, 1), { { hx, hy, hz, 24.2, 70.2 }, { hx, -hy, hz, 29.8, 70.2 }, { -hx, -hy, hz, 29.8, 96.8 }, { -hx, hy, hz, 24.2, 96.8 } } }, -- side
-            { Vector3.new(0, 0, -1), { { hx, -hy, -hz, 24.2, 70.2 }, { hx, hy, -hz, 29.8, 70.2 }, { -hx, hy, -hz, 29.8, 96.8 }, { -hx, -hy, -hz, 24.2, 96.8 } } }, -- side
-            { Vector3.new(1, 0, 0), { { hx, -hy, -hz, 82.2, 69.2 }, { hx, -hy, hz, 105.8, 69.2 }, { hx, hy, hz, 105.8, 77.8 }, { hx, hy, -hz, 82.2, 77.8 } } }, -- top (collar)
-            { Vector3.new(-1, 0, 0), { { -hx, -hy, -hz, 25, 72 }, { -hx, -hy, hz, 29, 72 }, { -hx, hy, hz, 29, 76 }, { -hx, hy, -hz, 25, 76 } } }, -- bottom
-        }
         local faces = {}
-        for _, F in ipairs(FACES) do
-            local n = F[1]
+        local function quad(n, corners)
             local nid = em:AddNormal(n)
             local muv = em:AddUV(Vector2.new(0.5 + n.X * 0.45, 0.5 - n.Y * 0.45)) -- metal (sphere-map) UV from the normal
             local vid, uid = {}, {}
-            for i, c in ipairs(F[2]) do
-                vid[i] = em:AddVertex(Vector3.new(c[1], c[2], c[3]))
+            for i, c in ipairs(corners) do
+                vid[i] = em:AddVertex(Vector3.new((c[1] - cx) * S, c[2], c[3]))
                 uid[i] = uv(c[4], c[5])
             end
             for _, t in ipairs({ { 1, 2, 3 }, { 1, 3, 4 } }) do
@@ -1669,6 +1664,27 @@ local function main(character, mode)
                 faces[#faces + 1] = { f, { uid[t[1]], uid[t[2]], uid[t[3]] }, { muv, muv, muv } }
             end
         end
+        -- SHIRT BOX. x = up (torso bone space, un-scaled), y = front(+)/back(-), z = side. Texture pixels are the FBX's own.
+        local xh, xl = B.top, B.bot
+        local X = function(v) return v * S end
+        local function sx(v) return v end
+        -- (x values are scaled below through (c[1]-cx)*S; y and z already carry S)
+        quad(Vector3.new(0, 1, 0), { { xh, hy, -hz, 30.6, 70.2 }, { xh, hy, hz, 53.5, 70.2 }, { xl, hy, hz, 53.5, 96.4 }, { xl, hy, -hz, 30.6, 96.4 } }) -- front (orange collar)
+        quad(Vector3.new(0, -1, 0), { { xh, -hy, hz, 0.7, 74.1 }, { xh, -hy, -hz, 23.3, 74.1 }, { xl, -hy, -hz, 23.3, 96.3 }, { xl, -hy, hz, 0.7, 96.3 } }) -- back (white collar)
+        quad(Vector3.new(0, 0, 1), { { xh, hy, hz, 22.2, 70.1 }, { xh, -hy, hz, 31.9, 70.1 }, { xl, -hy, hz, 31.9, 96.3 }, { xl, hy, hz, 22.2, 96.3 } }) -- side
+        quad(Vector3.new(0, 0, -1), { { xh, hy, -hz, 32.0, 70.2 }, { xh, -hy, -hz, 22.2, 70.2 }, { xl, -hy, -hz, 22.2, 96.3 }, { xl, hy, -hz, 32.0, 96.3 } }) -- side
+        quad(Vector3.new(1, 0, 0), { { xh, hy, hz, 106.6, 78.7 }, { xh, -hy, hz, 106.5, 69.7 }, { xh, -hy, -hz, 83.6, 69.8 }, { xh, hy, -hz, 83.3, 78.5 } }) -- top (collar patch)
+        quad(Vector3.new(-1, 0, 0), { { xl, -hy, -hz, 25.4, 80.9 }, { xl, -hy, hz, 27.7, 80.9 }, { xl, hy, hz, 27.7, 82.5 }, { xl, hy, -hz, 25.4, 82.5 } }) -- bottom
+        -- NECK BOX (skin colour)
+        local ny, nz = 0.199 * 0.5 * S, 0.249 * 0.5 * S
+        local nh, nl = B.neckTop, B.neckBot
+        local sk = { 60.5, 28.5 }
+        local function nq(n, c) for i = 1, 4 do c[i][4], c[i][5] = sk[1], sk[2] end quad(n, c) end
+        nq(Vector3.new(0, 1, 0), { { nh, ny, -nz }, { nh, ny, nz }, { nl, ny, nz }, { nl, ny, -nz } })
+        nq(Vector3.new(0, -1, 0), { { nh, -ny, nz }, { nh, -ny, -nz }, { nl, -ny, -nz }, { nl, -ny, nz } })
+        nq(Vector3.new(0, 0, 1), { { nh, ny, nz }, { nh, -ny, nz }, { nl, -ny, nz }, { nl, ny, nz } })
+        nq(Vector3.new(0, 0, -1), { { nh, ny, -nz }, { nh, -ny, -nz }, { nl, -ny, -nz }, { nl, ny, -nz } })
+        nq(Vector3.new(1, 0, 0), { { nh, ny, nz }, { nh, -ny, nz }, { nh, -ny, -nz }, { nh, ny, -nz } })
         local mp = _M.AssetService:CreateMeshPartAsync(Content.fromObject(em))
         CFG.MeshRef[mp] = { em = em, faces = faces, metal = false }
         pcall(function() mp.DoubleSided = true end)
