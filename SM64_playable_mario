@@ -1,4 +1,4 @@
-shared.M64Build = "20261126-12" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261126-13" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -4461,11 +4461,13 @@ local function main(character, mode)
                 if hit then
                     lastWall, wallNormal = t, flat(hit.Normal).Unit
                     if state == "LongJump" and ljBack then bljStuck = true end
-                    if state == "Dive" or state == "AirKick" or (state == "LongJump" and not ljBack and hs.Magnitude > 30) then
+                    if state == "Dive" or (state == "LongJump" and not ljBack and hs.Magnitude > 30) then
                         hv = wallNormal * 9
                         vy = 0
                         setState("AirBonk")
                         play("backward_air_kb", 1.5, 0.03)
+                    elseif state == "AirKick" then
+                        hv = wallNormal * 10 -- kicking a wall: he is pushed back off it for a moment (no bonk)
                     else
                         hv = hs - hs:Dot(wallNormal) * wallNormal
                     end
@@ -4801,26 +4803,30 @@ local function main(character, mode)
                 end
             elseif state == "Punch1" or state == "Punch2" or state == "Kick" then
                 fVel = math.max(0, fVel - 40 * dt)
-                groundDrive(fVel, faceYaw)
+                if (_M.recoil or 0) > 0 then -- hit a wall: slides backwards for a moment
+                    _M.recoil -= dt
+                    fVel = 0
+                    groundDrive((_M.recoilV or 14) * math.clamp(_M.recoil / 0.28, 0, 1), faceYaw + PI)
+                else
+                    groundDrive(fVel, faceYaw)
+                end
                 if stateTime > 0.06 and stateTime < (state == "Kick" and 0.5 or 0.28) then
                     local kind = state == "Kick" and "kick" or "punch"
                     hitbox(front(2.4), CFG.PunchRadius, CFG.Damage[kind], kind)
                 end
-                do -- punching or kicking a wall: knocked back, same as bonking into one
-                    local wh = stateTime > 0.05 and wallRay(dirOf(faceYaw), 2.6)
+                do -- punching or kicking a wall: he goes backwards for a bit (no bonk, the attack animation keeps playing)
+                    local wh = stateTime > 0.05 and os.clock() - (_M.recoilAt or -9) > 0.6 and wallRay(dirOf(faceYaw), 2.6)
                     if wh and flat(wh.Normal).Magnitude > 0.1 and dirOf(faceYaw):Dot(-flat(wh.Normal).Unit) > 0.5 then
-                        comboQueued = false
-                        fVel = 16
-                        setState("Bonk")
-                        play("ground_bonk", 1.6, 0.03)
+                        _M.recoilAt = os.clock()
+                        _M.recoil, _M.recoilV = 0.28, 14
                     end
                 end
-                if state ~= "Bonk" and stateTime > 0.1 and fresh("attack") then
+                if stateTime > 0.1 and fresh("attack") then
                     comboQueued = true
                     eat("attack")
                 end
                 local dur = state == "Kick" and 0.75 or 0.4
-                if state ~= "Bonk" and stateTime >= dur then
+                if stateTime >= dur then
                     if comboQueued and state == "Punch1" then
                         comboQueued = false
                         setState("Punch2"); fVel = CFG.PunchLunge
