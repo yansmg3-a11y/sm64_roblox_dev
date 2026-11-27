@@ -1,4 +1,4 @@
-shared.M64Build = "20261126-7" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261126-9" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -1870,12 +1870,7 @@ local function main(character, mode)
             if p and mp then
                 if SM.content then pcall(function() mp.TextureContent = SM.content end) end
                 for _, e in ipairs(p.extra or {}) do
-                    -- SMGyan's full blocky torso already has the collar printed on its front. The torso's old "alpha" shell belongs to the OLD, shorter torso:
-                    -- left in, it floats in the middle of the shirt and draws a second collar there. So it is not built any more.
-                    -- (shared.M64Opts.smgTorsoDecal = true brings it back.)
-                    local skipE = p.block ~= nil and e.sub == "alpha" and (shared.M64Opts or {}).smgTorsoDecal ~= true
-                    local okE, ep = false, nil
-                    if not skipE then okE, ep = pcall(_M.buildMesh, e) end
+                    local okE, ep = pcall(_M.buildMesh, e)
                     if okE and ep then
                         ep.Name = "M64_" .. e.sub
                         ep.Anchored = false; ep.CanCollide = false; ep.CanQuery = false; ep.CanTouch = false; ep.Massless = true
@@ -3396,6 +3391,16 @@ local function main(character, mode)
         play("general_land", 1, 0.03)
         accDamage(frac)
     end
+    -- hard landing after a screaming fall: the SAME knockback as bonking into a wall (he is thrown back and lies there), costs health
+    function ACC.startImpact(frac)
+        ACC.cool = os.clock() + 3
+        hv = Vector3.zero
+        fVel = 16
+        _M.floorImpactT = os.clock() -- tells the sound code this knockback is a FLOOR hit
+        setState("Bonk")
+        play("ground_bonk", 1.6, 0.03)
+        accDamage(frac)
+    end
     -- is somebody holding Mario? (joint / weld / constraint to another character)
     local function accGrabber()
         for _, p in ipairs(root:GetConnectedParts(true)) do
@@ -3428,8 +3433,9 @@ local function main(character, mode)
         ACC.peak, ACC.maxDown = root.Position.Y, 0
         if from == "GroundPound" then return false end
         local u = CFG.ModelHeight / 160 -- SM64 units -> studs
-        if drop > 1150 * u and down > 55 * 30 * u * 0.7 then
-            ACC.startSquish(drop > 3000 * u and 0.75 or 0.5, "fall")
+        if drop > 1150 * u and down > 55 * 30 * u * 0.7 and os.clock() - (_M.fallScreamT or -9) < 0.4 then
+            _M.fallScreamT = nil
+            ACC.startImpact(drop > 3000 * u and 0.75 or 0.5) -- only a fall long enough to make him scream hurts (no squish: the wall-bonk knockback instead)
             return true
         end
         return false
@@ -4440,7 +4446,7 @@ local function main(character, mode)
                 if hit then
                     lastWall, wallNormal = t, flat(hit.Normal).Unit
                     if state == "LongJump" and ljBack then bljStuck = true end
-                    if state == "Dive" or (state == "LongJump" and not ljBack and hs.Magnitude > 30) then
+                    if state == "Dive" or state == "AirKick" or (state == "LongJump" and not ljBack and hs.Magnitude > 30) then
                         hv = wallNormal * 9
                         vy = 0
                         setState("AirBonk")
@@ -4685,7 +4691,8 @@ local function main(character, mode)
                 if skidIsBrake then
                     faceYaw = moveYaw -- braking: keep facing the way he's sliding
                 else
-                    faceYaw = skidFace -- turning around is automatic: he faces the new way at once while still sliding the old way (the skid looks backwards)
+                    -- turning skid looks BACKWARDS: he slides with his back to the new direction and swings round to face it as he stops
+                    faceYaw = skidFace + PI * math.clamp((fVel - 3) / 9, 0, 1)
                 end
                 groundDrive(fVel, moveYaw)
                 if fresh("jump") then
@@ -4784,12 +4791,21 @@ local function main(character, mode)
                     local kind = state == "Kick" and "kick" or "punch"
                     hitbox(front(2.4), CFG.PunchRadius, CFG.Damage[kind], kind)
                 end
-                if stateTime > 0.1 and fresh("attack") then
+                do -- punching or kicking a wall: knocked back, same as bonking into one
+                    local wh = stateTime > 0.05 and wallRay(dirOf(faceYaw), 2.6)
+                    if wh and flat(wh.Normal).Magnitude > 0.1 and dirOf(faceYaw):Dot(-flat(wh.Normal).Unit) > 0.5 then
+                        comboQueued = false
+                        fVel = 16
+                        setState("Bonk")
+                        play("ground_bonk", 1.6, 0.03)
+                    end
+                end
+                if state ~= "Bonk" and stateTime > 0.1 and fresh("attack") then
                     comboQueued = true
                     eat("attack")
                 end
                 local dur = state == "Kick" and 0.75 or 0.4
-                if stateTime >= dur then
+                if state ~= "Bonk" and stateTime >= dur then
                     if comboQueued and state == "Punch1" then
                         comboQueued = false
                         setState("Punch2"); fVel = CFG.PunchLunge
@@ -4876,7 +4892,11 @@ local function main(character, mode)
                 end
             end
         end
-        root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, faceYaw, 0)
+        do -- the wall-kick landing animation is turned round: show it the other way (eased, no pop)
+            local wkT = (state == "Land" and landAnim == "wall_kick_land") and PI or 0
+            _M.wkFlip = (_M.wkFlip or 0) + (wkT - (_M.wkFlip or 0)) * (1 - math.exp(-14 * dt))
+        end
+        root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, faceYaw + (_M.wkFlip or 0), 0)
         local pitchT, rollT = 0, 0
         if state == "Walk" then
             local sf = math.clamp(fVel / CFG.RunMax, 0, 1)
@@ -5734,7 +5754,22 @@ local function main(character, mode)
                         if humanoid.Health <= 0 then return end
                         local st = tostring(state)
                         if st ~= prevState then
-                            if st == "Bonk" or st == "AirBonk" then sfx("impact", 1); sfx("hurt", 0.9) end -- hitting a wall
+                            if st == "Bonk" or st == "AirBonk" then
+                                if os.clock() - (_M.floorImpactT or -9) < 0.5 then
+                                    -- hit the FLOOR (hard fall): the OLD "you got hit" impact sound (the voice "ungh" still plays through the normal hurt reaction)
+                                    _M.floorImpactT = nil
+                                    pcall(function()
+                                        local t = Instance.new("Sound")
+                                        t.SoundId = "rbxassetid://88830788016885"
+                                        t.Volume = 1.6
+                                        t.Parent = root
+                                        t:Play()
+                                        game:GetService("Debris"):AddItem(t, 4)
+                                    end)
+                                else
+                                    sfx("impact", 1); sfx("hurt", 0.9) -- hitting a wall
+                                end
+                            end
                         end
                         -- warp: he suddenly appears far away
                         local pos = root.Position
@@ -7544,6 +7579,7 @@ local function main(character, mode)
                     local k = math.max(U(), 0.2)
                     if not grounded and vel.Y < -70 * k and not FXS.gliding and state ~= "GroundPound" and state ~= "GPStart" then
                         SFXX.fallT += dt
+                        if SFXX.fallT > 0.45 then _M.fallScreamT = os.clock() end -- he is screaming now (used for the hard-landing knockback)
                         if SFXX.fallT > 0.45 and not SFXX.screaming and opts.voice then
                             SFXX.screaming = true
                             if PK.stant then
