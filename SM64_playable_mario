@@ -1,4 +1,4 @@
-shared.M64Build = "20261126-11" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261126-12" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -3391,11 +3391,19 @@ local function main(character, mode)
         play("general_land", 1, 0.03)
         accDamage(frac)
     end
-    -- hard landing after a screaming fall: the SAME knockback animation as jumping and diving into a wall (thrown backwards, "backward_air_kb"),
-    -- then the normal knocked-down / get-up sequence. No squish. Costs health.
+    -- hard landing after a screaming fall: the knockback animation (like diving into a wall) played IN PLACE on the floor - no hop, no sliding back.
+    -- Costs half of his health. No squish.
     function ACC.startImpact(frac)
         ACC.cool = os.clock() + 3
-        accKnock(frac, nil, -dirOf(faceYaw) * 20) -- "hit" from the front: knocked backwards
+        ACC.mode, ACC.t, ACC.front, ACC.hard, ACC.phase = "Hurt", 0, true, true, "floor"
+        ACC.kb = -dirOf(faceYaw) * 0.01
+        hv, fVel = Vector3.zero, 0
+        setState("Hurt")
+        humanoid:Move(Vector3.zero, false)
+        humanoid.WalkSpeed = 0.01
+        local v = root.AssemblyLinearVelocity
+        root.AssemblyLinearVelocity = Vector3.new(0, math.min(v.Y, 0), 0)
+        play("backward_air_kb", 1, 0.03)
         accDamage(frac)
     end
     -- is somebody holding Mario? (joint / weld / constraint to another character)
@@ -3432,7 +3440,7 @@ local function main(character, mode)
         local u = CFG.ModelHeight / 160 -- SM64 units -> studs
         if drop > 1150 * u and down > 55 * 30 * u * 0.7 and os.clock() - (_M.fallScreamT or -9) < 0.4 then
             _M.fallScreamT = nil
-            ACC.startImpact(drop > 3000 * u and 0.75 or 0.5) -- only a fall long enough to make him scream hurts (no squish: the wall-bonk knockback instead)
+            ACC.startImpact(0.5) -- only a fall long enough to make him scream hurts: HALF of his health (no squish)
             return true
         end
         return false
@@ -3503,6 +3511,16 @@ local function main(character, mode)
                 if (ACC.t > 0.15 and fl and v.Y < 5) or ACC.t > 2.5 then
                     ACC.phase, ACC.t = "slide", 0
                     play(ACC.front and "hurt_front" or "hurt_back", 1, 0.03)
+                end
+            elseif ACC.phase == "floor" then
+                -- hard fall: he stays on the floor while the knockback animation plays, then lies / gets up
+                humanoid:Move(Vector3.zero, false)
+                humanoid.WalkSpeed = 0.01
+                hv, fVel = Vector3.zero, 0
+                root.AssemblyLinearVelocity = Vector3.new(0, math.min(v.Y, 0), 0)
+                if ACC.t > math.max(trackLength("backward_air_kb", 0.6) * 0.9, 0.45) then
+                    ACC.phase, ACC.t = "slide", 0
+                    play("hurt_front", 1, 0.03)
                 end
             else
                 ACC.kb = ACC.kb * math.max(0, 1 - (ACC.hard and 3.2 or 4.5) * dt)
