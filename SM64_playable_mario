@@ -1,4 +1,4 @@
-shared.M64Build = "20261126-13" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261126-14" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -3920,7 +3920,12 @@ local function main(character, mode)
         elseif AIR[state] and state ~= "AirKick" and state ~= "Dive" and state ~= "GPStart"
             and state ~= "GroundPound" and state ~= "AirBonk" then
             local speed = flat(hv).Magnitude
-            if speed >= CFG.DiveMinSpeed then
+            local nearWall = false
+            if speed > 1 then
+                local wr = workspace:Raycast(root.Position, flat(hv).Unit * 4, rayParams)
+                nearWall = wr ~= nil and math.abs(wr.Normal.Y) < 0.35
+            end
+            if speed >= CFG.DiveMinSpeed and not nearWall then
                 local d = flat(hv).Unit
                 launch("Dive", CFG.DiveV, d * math.max(speed, CFG.DiveSpeed), yawOf(d))
             else
@@ -4859,9 +4864,24 @@ local function main(character, mode)
                 end
             elseif state == "SlideKick" then
                 fVel = math.max(0, fVel - CFG.SlideKickFriction * dt)
-                groundDrive(fVel, moveYaw)
+                if (_M.recoil or 0) > 0 then -- hit a wall: slides backwards for a moment
+                    _M.recoil -= dt
+                    fVel = 0
+                    groundDrive((_M.recoilV or 14) * math.clamp(_M.recoil / 0.28, 0, 1), moveYaw + PI)
+                else
+                    groundDrive(fVel, moveYaw)
+                end
                 hitbox(front(2.6), 4, CFG.Damage.slide, "slide")
-                if groundWallBonk() then
+                do -- kicking a wall: he goes backwards for a bit (no bonk)
+                    local wh = (_M.recoil or 0) <= 0 and fVel >= 10 and os.clock() - (_M.recoilAt or -9) > 0.6 and wallRay(dirOf(moveYaw), 2.7)
+                    if wh and flat(wh.Normal).Magnitude > 0.1 and dirOf(moveYaw):Dot(-flat(wh.Normal).Unit) > 0.7 then
+                        faceYaw = moveYaw
+                        _M.recoilAt = os.clock()
+                        _M.recoil, _M.recoilV = 0.28, 14
+                        fVel = 0
+                    end
+                end
+                if (_M.recoil or 0) > 0 then
                 elseif stateTime > 0.7 or fVel < 4 then
                     landAnim, landLock, landFreeze, landFriction = "crouch_from_slide_kick", 0.5, false, 50
                     setState("Land")
