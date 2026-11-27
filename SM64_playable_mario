@@ -1,4 +1,4 @@
-shared.M64Build = "20261126-9" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261126-11" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -3391,14 +3391,11 @@ local function main(character, mode)
         play("general_land", 1, 0.03)
         accDamage(frac)
     end
-    -- hard landing after a screaming fall: the SAME knockback as bonking into a wall (he is thrown back and lies there), costs health
+    -- hard landing after a screaming fall: the SAME knockback animation as jumping and diving into a wall (thrown backwards, "backward_air_kb"),
+    -- then the normal knocked-down / get-up sequence. No squish. Costs health.
     function ACC.startImpact(frac)
         ACC.cool = os.clock() + 3
-        hv = Vector3.zero
-        fVel = 16
-        _M.floorImpactT = os.clock() -- tells the sound code this knockback is a FLOOR hit
-        setState("Bonk")
-        play("ground_bonk", 1.6, 0.03)
+        accKnock(frac, nil, -dirOf(faceYaw) * 20) -- "hit" from the front: knocked backwards
         accDamage(frac)
     end
     -- is somebody holding Mario? (joint / weld / constraint to another character)
@@ -5756,16 +5753,8 @@ local function main(character, mode)
                         if st ~= prevState then
                             if st == "Bonk" or st == "AirBonk" then
                                 if os.clock() - (_M.floorImpactT or -9) < 0.5 then
-                                    -- hit the FLOOR (hard fall): the OLD "you got hit" impact sound (the voice "ungh" still plays through the normal hurt reaction)
+                                    -- hit the FLOOR (hard fall): just the normal "bonk" sound of the knockback (the same one a dive into a wall always had) - no extra wall-impact sound
                                     _M.floorImpactT = nil
-                                    pcall(function()
-                                        local t = Instance.new("Sound")
-                                        t.SoundId = "rbxassetid://88830788016885"
-                                        t.Volume = 1.6
-                                        t.Parent = root
-                                        t:Play()
-                                        game:GetService("Debris"):AddItem(t, 4)
-                                    end)
                                 else
                                     sfx("impact", 1); sfx("hurt", 0.9) -- hitting a wall
                                 end
