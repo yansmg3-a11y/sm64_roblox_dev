@@ -1,4 +1,4 @@
-shared.M64Build = "20261126-6" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261126-7" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -1870,7 +1870,12 @@ local function main(character, mode)
             if p and mp then
                 if SM.content then pcall(function() mp.TextureContent = SM.content end) end
                 for _, e in ipairs(p.extra or {}) do
-                    local okE, ep = pcall(_M.buildMesh, e)
+                    -- SMGyan's full blocky torso already has the collar printed on its front. The torso's old "alpha" shell belongs to the OLD, shorter torso:
+                    -- left in, it floats in the middle of the shirt and draws a second collar there. So it is not built any more.
+                    -- (shared.M64Opts.smgTorsoDecal = true brings it back.)
+                    local skipE = p.block ~= nil and e.sub == "alpha" and (shared.M64Opts or {}).smgTorsoDecal ~= true
+                    local okE, ep = false, nil
+                    if not skipE then okE, ep = pcall(_M.buildMesh, e) end
                     if okE and ep then
                         ep.Name = "M64_" .. e.sub
                         ep.Anchored = false; ep.CanCollide = false; ep.CanQuery = false; ep.CanTouch = false; ep.Massless = true
