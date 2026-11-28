@@ -1,4 +1,4 @@
-shared.M64Build = "20261128-1" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261128-2" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -4043,6 +4043,13 @@ local function main(character, mode)
     local function feetOffset()
         return rigFeet()
     end
+    -- THE HIPS (the "Butt" piece). The shadow follows THEM instead of the Humanoid root: when he dives, flips or crouches the hips move
+    -- and the shadow goes with his body. Only the hips' POSITION is used, the shadow never turns or tilts with them (it lies on the floor).
+    local function hipsPos()
+        local hp = piece["Butt"]
+        if hp and hp.Parent then return hp.Position end
+        return root.Position
+    end
     CFG.StairMax = CFG.ModelHeight * 0.45 -- tallest step he climbs just by walking (studs)
     CFG.StairAngle = 55 -- a slope up to this steep, walked on with the stick held, counts as stairs (no slide)
     local function stairsOn() return (shared.M64Opts or {}).stairs ~= false end
@@ -5068,10 +5075,10 @@ local function main(character, mode)
             end
             local function updateShadow()
                 if not opts.shadow then hideShadow() return end
-                local origin = root.Position
-                local res = workspace:Raycast(origin, Vector3.new(0, -400, 0), shadowRay)
+                -- straight down from the hips to the floor (his model is inside `character`, which the ray ignores)
+                local res = workspace:Raycast(hipsPos() + Vector3.new(0, 1, 0), Vector3.new(0, -400, 0), shadowRay)
                 if not res then hideShadow() return end
-                local h = math.max(origin.Y - feetOffset() - res.Position.Y, 0)
+                local h = math.max(root.Position.Y - feetOffset() - res.Position.Y, 0) -- how far his feet are off the floor (size / fade, as before)
                 local k = math.clamp(1 - h / 80, 0.35, 1)
                 local vis = math.clamp(1 - h / 200, 0.2, 1)
                 local d = CFG.ModelHeight * 0.85 * k
@@ -5079,6 +5086,7 @@ local function main(character, mode)
                 local ref = math.abs(n.X) < 0.9 and Vector3.xAxis or Vector3.zAxis
                 local vx = (ref - n * ref:Dot(n)).Unit
                 shadow.Size = Vector3.new(d, 0.05, d)
+                -- always flat to the floor: its up-direction is the FLOOR's normal (it lies flush on slopes too), never Mario's or the hips' tilt
                 shadow.CFrame = CFrame.fromMatrix(res.Position + n * 0.04, vx, n, vx:Cross(n))
                 shadowImg.ImageTransparency = 1 - 0.55 * vis -- was 0.8: a more see-through shadow
                 local inst = res.Instance
@@ -9526,7 +9534,7 @@ local function main(character, mode)
                     return end
                 if os.clock()>nextGroundFilter then nextGroundFilter = os.clock()+1
                     refreshGroundFilter() end
-                local result = workspace:Raycast(root.Position+Vector3.new(0, 1, 0), Vector3.new(0, -400, 0), groundRay)
+                local result = workspace:Raycast(hipsPos()+Vector3.new(0, 1, 0), Vector3.new(0, -400, 0), groundRay) -- from the hips, like your own shadow
                 if not result then shadowImage.ImageTransparency = 1
                     return end
                 if result.Instance and result.Instance:IsA("BasePart") then
