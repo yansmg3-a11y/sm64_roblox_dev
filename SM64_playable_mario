@@ -1,4 +1,4 @@
-shared.M64Build = "20261128-2" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261128-3" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -4047,7 +4047,13 @@ local function main(character, mode)
     -- and the shadow goes with his body. Only the hips' POSITION is used, the shadow never turns or tilts with them (it lies on the floor).
     local function hipsPos()
         local hp = piece["Butt"]
-        if hp and hp.Parent then return hp.Position end
+        if hp and hp.Parent then
+            -- the hip JOINT, not the middle of the hip mesh: on some characters that mesh sits to one side of the joint (it is attached with an
+            -- offset, center[]), which pushed the shadow sideways. The joint is the same spot on every character.
+            local p = hp.CFrame:PointToWorldSpace(-(center["Butt"] or Vector3.zero))
+            local away = Vector3.new(p.X - root.Position.X, 0, p.Z - root.Position.Z)
+            if away.Magnitude <= CFG.ModelHeight then return p end -- (safety: a hip far from his body means something is off: use the root)
+        end
         return root.Position
     end
     CFG.StairMax = CFG.ModelHeight * 0.45 -- tallest step he climbs just by walking (studs)
