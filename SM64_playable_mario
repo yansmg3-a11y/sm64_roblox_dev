@@ -1,4 +1,4 @@
-shared.M64Build = "20261128-4" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
+shared.M64Build = "20261128-5" -- version tag: UPDATE SCRIPT compares this with the one in the GitHub file (change it whenever you publish a new version)
 shared.M64UpdateURL = shared.M64UpdateURL or "https://raw.githubusercontent.com/yansmg3-a11y/sm64_roblox_dev/main/SM64_playable_mario"
 pcall(function() if shared.M64MainConn then shared.M64MainConn:Disconnect(); shared.M64MainConn = nil end end) -- a re-run / update replaces the old copy's respawn hook
 -- built-in R6 movement fix (from the R6 patch): switches itself on ONLY for R6 characters, does nothing on R15
@@ -4966,8 +4966,7 @@ local function main(character, mode)
         end
         local a = 1 - math.exp(-10 * dt)
         local shiftT = 0
-        if state == "Walk" then shiftT = math.clamp(fVel / CFG.RunMax, 0, 1)
-        elseif state == "Crawl" then shiftT = math.clamp(fVel / math.max(CFG.CrawlMax, 0.1), 0, 1) end
+        if state == "Walk" then shiftT = math.clamp(fVel / CFG.RunMax, 0, 1) end -- running only: crawling keeps the torso still, like SM64
         torsoFwd = lerp(torsoFwd, shiftT, a)
         tiltPitch = lerp(tiltPitch, pitchT, a)
         tiltRoll = lerp(tiltRoll, rollT, a)
